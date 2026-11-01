@@ -1,0 +1,16 @@
+import assert from 'node:assert/strict';
+import {parseTotal,observe,itemNames} from './dist/detection.mjs';
+assert.equal(parseTotal('1,250,000\n'),1250000);
+assert.equal(parseTotal('1.250.000'),1250000);
+assert.equal(parseTotal('Total 123'),null);
+assert.equal(parseTotal(''),null);
+let s={total:null,items:'',candidate:null};
+let r=observe(s,{total:100,items:'Old Item 100',confidence:90});assert.equal(r.kind,'baseline');s=r.state;
+r=observe(s,{total:200,items:'Old Item 100\nNew Item 100',confidence:90});assert.equal(r.kind,'pending');s=r.state;
+r=observe(s,{total:200,items:'Old Item 100\nNew Item 100',confidence:90});assert.equal(r.kind,'sale');assert.equal(r.amount,100);assert.deepEqual(r.names,['New Item']);s=r.state;
+assert.equal(observe(s,{total:200,items:'',confidence:90}).kind,'unchanged');
+assert.equal(observe(s,{total:0,items:'',confidence:90}).kind,'reset');
+assert.equal(observe(s,{total:300,items:'',confidence:40}).kind,'unreadable');
+assert.deepEqual(itemNames('Potion 10','Potion 10\nPotion 10'),['Potion']);
+assert.equal(observe({...s,candidate:'300|Item'},{total:null,items:'Item',confidence:90}).state.candidate,null);
+console.log('Detection checks passed: parsing, stable changes, duplicates, low confidence, and resets.');
