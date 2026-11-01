@@ -9,7 +9,7 @@ Deno.serve(async (req) => {
   if (req.method !== 'POST') return json({ error: 'POST only' }, 405, headers);
   try {
     const user = await caller(req);
-    if (!user) return json({ error: 'Session expired. Reload the page and try again.' }, 401, headers);
+    if (!user?.email) return json({ error: 'Sign in by email before purchasing a campaign.' }, 401, headers);
     const body = await req.json().catch(() => ({}));
     const { message, sender, errors } = checkMegaphone(body);
     if (errors.length) return json({ error: errors.join(' ') }, 400, headers);
@@ -41,7 +41,8 @@ Deno.serve(async (req) => {
       cancel_url: `${origin}/#megaphones?cancelled=1`,
       expires_at: Math.floor(Date.now() / 1000) + 30 * 60,
     });
-    await db.from('megaphones').update({ checkout_session: session.id, livemode: session.livemode }).eq('id', mega.id);
+    const {error:linkError}=await db.from('megaphones').update({ checkout_session: session.id, livemode: session.livemode }).eq('id', mega.id);
+    if(linkError){await s.checkout.sessions.expire(session.id);throw Error('Could not save checkout. Try again later.');}
     return json({ url: session.url, id: mega.id, test_mode: !session.livemode }, 200, headers);
   } catch (e) {
     console.error(e);

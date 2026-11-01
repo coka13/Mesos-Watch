@@ -1,0 +1,11 @@
+import assert from 'node:assert/strict';import {handlePaymentEvent,paymentAdapter}from '../supabase/functions/_shared/payment-events.js';
+let state={id:'campaign',price_cents:199,currency:'usd',status:'awaiting_payment'},paid=0,approved=0;
+const adapter={find:async()=>({...state}),markPaid:async()=>{paid++;state.status='paid_pending_review';return{...state};},approve:async()=>{approved++;state.status='scheduled';},expire:async()=>{},refund:async()=>{state.status='refunded';}};
+const event={type:'checkout.session.completed',data:{object:{id:'cs_test',metadata:{megaphone_id:'campaign'},payment_status:'paid',payment_intent:'pi_test',amount_total:199,currency:'usd',livemode:false}}};
+await handlePaymentEvent(event,adapter,{autoApprove:true});await handlePaymentEvent(event,adapter,{autoApprove:true});assert.equal(paid,1);assert.equal(approved,1,'duplicate events cannot activate twice');
+await assert.rejects(handlePaymentEvent({...event,data:{object:{...event.data.object,amount_total:1}}},adapter),/mismatch/);
+state.status='awaiting_payment';await assert.rejects(handlePaymentEvent(event,{...adapter,markPaid:async()=>{throw Error('database down');}}),/database down/);
+state.status='paid_pending_review';await assert.rejects(handlePaymentEvent(event,{...adapter,approve:async()=>{throw Error('temporary approval failure');}},{autoApprove:true}),/approval failure/);await handlePaymentEvent(event,adapter,{autoApprove:true});assert.equal(state.status,'scheduled');
+await handlePaymentEvent({type:'charge.refunded',data:{object:{refunded:true,payment_intent:'pi_test'}}},adapter);assert.equal(state.status,'refunded');
+const broken={from:()=>({update:()=>({eq:()=>({eq:async()=>({error:{message:'failure'}})})})})};await assert.rejects(paymentAdapter(broken).expire('cs_test'),/database/);
+console.log('Payments: duplicate events, amount validation, write failures, approval retry and refunds passed. No checkout created.');

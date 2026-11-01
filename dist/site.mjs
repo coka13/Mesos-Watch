@@ -53,10 +53,10 @@ async function loadMegaphoneView(q){
  if(!configured()){$('mg-buy').disabled=true;note('Megaphones are not available yet: the site owner has not connected the database and payments.','warn');$('mg-live').replaceChildren(el('li',{className:'empty',textContent:'Unavailable until the site is connected.'}));$('mg-mine').replaceChildren(el('li',{className:'empty',textContent:'Unavailable until the site is connected.'}));renderPlans(FALLBACK_PLANS);return;}
  try{plans=await megaphonePlans();renderPlans(plans);}catch(e){note(e.message,'error');$('mg-buy').disabled=true;}
  refreshMine();
- try{const live=await liveMegaphones(sel.value);$('mg-live').replaceChildren(...(live.length?live.map(m=>el('li',{},el('span',{textContent:(m.sender?m.sender+' : ':'')+m.message}),el('small',{textContent:'until '+new Date(m.ends_at).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})}))):[el('li',{className:'empty',textContent:'No megaphones live right now.'})]));}catch(e){$('mg-live').replaceChildren(el('li',{className:'empty',textContent:e.message}));}
+ try{const live=await liveMegaphones(sel.value);$('mg-live').replaceChildren(...(live.length?live.map(m=>el('li',{},el('span',{textContent:(m.sender?m.sender+' : ':'')+m.message}),el('small',{textContent:'Campaign '+m.id+' · until '+new Date(m.ends_at).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})}))):[el('li',{className:'empty',textContent:'No megaphones live right now.'})]));}catch(e){$('mg-live').replaceChildren(el('li',{className:'empty',textContent:e.message}));}
 }
 // Shown when the database is unreachable; the real prices come from megaphone_plans (supabase/migrations).
-const FALLBACK_PLANS=[{id:'p60',label:'1 hour',price_cents:100,minutes:60},{id:'p150',label:'2.5 hours',price_cents:200,minutes:150},{id:'p360',label:'6 hours',price_cents:400,minutes:360},{id:'p720',label:'12 hours',price_cents:700,minutes:720},{id:'p1440',label:'24 hours',price_cents:1200,minutes:1440}];
+const FALLBACK_PLANS=[{id:'basic30',label:'Basic · 30 minutes',price_cents:199,minutes:30},{id:'premium120',label:'Premium · 2 hours',price_cents:399,minutes:120},{id:'featured360',label:'Featured · 6 hours',price_cents:599,minutes:360}];
 // Saving against the 1-hour rate (the cheapest plan per minute is the reference only if it is the shortest).
 function planNote(p,list){const base=list.reduce((a,b)=>a.minutes<b.minutes?a:b);const perHour=p.price_cents*60/p.minutes,save=Math.round(100*(1-perHour/(base.price_cents*60/base.minutes)));return money(Math.round(perHour))+' per hour'+(save>0?` · save ${save}%`:'');}
 function renderPlans(list){
@@ -76,7 +76,7 @@ function note(text,kind){const n=$('mg-note');n.textContent=text;n.className='st
 async function refreshMine(){
  try{const mine=await myMegaphones();
   const label={awaiting_payment:'Awaiting payment',paid_pending_review:'Paid · waiting for review',queued:'Approved · queued',live:'Live now',expired:'Finished',rejected:'Rejected',refunded:'Refunded',cancelled:'Cancelled',removed:'Removed'};
-  $('mg-mine').replaceChildren(...(mine.length?mine.map(m=>el('li',{},el('span',{textContent:m.message}),el('small',{textContent:[label[m.display_status]||m.display_status,`${m.minutes} min · ${money(m.price_cents)}`,m.starts_at&&m.display_status!=='expired'?'starts '+new Date(m.starts_at).toLocaleString():'',m.reject_reason,m.livemode?'':'test payment'].filter(Boolean).join(' · ')}))):[el('li',{className:'empty',textContent:'You have not bought a megaphone in this browser.'})]));
+  $('mg-mine').replaceChildren(...(mine.length?mine.map(m=>el('li',{},el('span',{textContent:m.message}),el('small',{textContent:['Campaign '+m.id,label[m.display_status]||m.display_status,`${m.minutes} min · ${money(m.price_cents)}`,m.starts_at&&m.display_status!=='expired'?'starts '+new Date(m.starts_at).toLocaleString():'',m.reject_reason,m.livemode?'':'test payment'].filter(Boolean).join(' · ')}))):[el('li',{className:'empty',textContent:'You have not bought a megaphone in this browser.'})]));
  }catch(e){$('mg-mine').replaceChildren(el('li',{className:'empty',textContent:e.message}));}
 }
 $('mg-message').oninput=preview;$('mg-sender').oninput=preview;

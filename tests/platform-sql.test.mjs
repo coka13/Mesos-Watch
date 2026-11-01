@@ -53,4 +53,14 @@ await assert.rejects(as(B,`select review_market_report($1,'actioned','Trying to 
 await as(C,`select review_market_report($1,'dismissed','Compared with original supporting information')`,[report.id]);
 assert.equal((await as(A,`select status from market_reports where id=$1`,[report.id]))[0].status,'dismissed');
 console.log('Community: private watchlists, alert deduplication, report rate/duplicate guards and admin review passed.');
+assert.deepEqual((await db.query(`select price_cents from megaphone_plans where active order by sort`)).rows.map(r=>r.price_cents),[199,399,599]);
+const campaign=(await db.query(`insert into megaphones(buyer,message,plan_id,minutes,price_cents,status)values($1,'A legitimate paid ad','basic30',30,199,'paid_pending_review')returning id`,[A])).rows[0];
+await assert.rejects(as(C,`select approve_megaphone($1)`,[campaign.id]),/Verified payment/);
+await db.query(`update megaphones set paid_at=now(),checkout_session='cs_test_local',payment_intent='pi_test_local' where id=$1`,[campaign.id]);
+await as(C,`select approve_megaphone($1)`,[campaign.id]);
+await assert.rejects(as(C,`select approve_megaphone($1)`,[campaign.id]),/scheduled/);
+await assert.rejects(as(A,`select post_test_megaphone('code','Cannot bypass checkout')`),/Disabled/);
+await db.query(`update megaphones set starts_at=now()-interval '2 hours',ends_at=now()-interval '1 hour'where id=$1`,[campaign.id]);
+assert.equal((await db.query(`select * from live_megaphones where id=$1`,[campaign.id])).rows.length,0,'expired ads invisible');
+console.log('Megaphones: configured packages, payment prerequisites, duplicate approval, disabled bypass and expiration passed.');
 await db.close();
