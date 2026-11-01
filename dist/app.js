@@ -1,20 +1,24 @@
 import {observeChat} from './chat.mjs?v=reader-4';
 import {discordBody} from './notifications.mjs?v=reader-5';
-import {parseTotal,observe,chooseItemReading} from './detection.mjs?v=reader-4';
+import {createSession,observeStore} from './store-session.mjs?v=phase3-1';
+import {parseTotal,chooseItemReading} from './detection.mjs?v=reader-4';
 import {tsvWords,locateRegions,frameScale,coinScorer} from './locate.mjs?v=autoselect-3';
 import {reportObservations,configured as boardConfigured} from './api.mjs?v=pc-4';
 const $=id=>document.getElementById(id);
 const video=$('video'),preview=$('preview'),ctx=preview.getContext('2d');
-let stream=null,regions={},mode=null,drag=null,timer=null,watching=false,busy=false,worker=null,workerPromise=null,state={total:null,items:'',candidate:null},sales=[],frame=null,checking=false;
+let stream=null,regions={},mode=null,drag=null,timer=null,watching=false,busy=false,worker=null,workerPromise=null,state=createSession(crypto.randomUUID()),sales=[],frame=null,checking=false;
 let chatState={ready:false,keys:[],candidate:null},chatCount=0;
 const fmt=n=>n.toLocaleString('en-US');
+const baselineNote=document.createElement('p');baselineNote.className='hint';baselineNote.id='session-baseline';baselineNote.textContent='Session starting mesos: not set';$('balance-note').after(baselineNote);
+const meso=(size=14)=>{const s=document.createElement('span');s.className='meso';s.style.setProperty('--m',size+'px');s.title='mesos';const i=document.createElement('img');i.src='meso.png?v=ms-1';i.alt='';i.width=i.height=size;i.decoding='async';s.append(i);return s;};
+const mesoAmt=(text,size=14)=>{const s=document.createElement('span');s.className='meso-amt';s.append(meso(size),document.createTextNode(String(text)));return s;};
 function status(text,error=false){$('status').textContent=text;$('status').classList.toggle('error',error);}
 function controls(){
  const connected=!!stream;
  $('save-item-crop').disabled=!connected||!regions.items||busy;
  for(const id of ['select-total','select-items','select-balance','select-chat','select-sale','auto-detect'])$(id).disabled=!connected||watching||checking||busy;
  $('read').disabled=!connected||!regions.total||!regions.items||busy||watching;
- $('start').disabled=!connected||!regions.total||!regions.items||watching||busy||checking;
+ $('start').disabled=!connected||!regions.total||!regions.items||!regions.balance||watching||busy||checking;
  $('connect').disabled=watching||checking||busy;$('interval').disabled=watching;$('stop').disabled=!watching;
  $('chat-alerts').disabled=watching||busy;
 }
@@ -67,7 +71,7 @@ async function reading(){
  await w.setParameters({tessedit_pageseg_mode:'6',tessedit_char_whitelist:''});
  const i=await w.recognize(prepare(itemsImage)),i2=await w.recognize(prepare(itemsImage,true));
  const chosen=chooseItemReading(i.data,i2.data);
- await readBalance(w);
+ const balance=await readBalance(w);
  $('total-reading').textContent=total===null?'Reselect total':fmt(total)+' mesos';
  $('items-reading').textContent=chosen.display||'No item names found — select the names only';
  $('items-reading').classList.toggle('uncertain',!chosen.itemReliable);
@@ -75,26 +79,28 @@ async function reading(){
  $('item-quality').classList.toggle('uncertain',!chosen.itemReliable);
  $('raw-ocr').textContent='Total pass 1: '+t.data.text.trim()+'\nTotal pass 2: '+t2.data.text.trim()+'\n\nItem pass 1:\n'+i.data.text.trim()+'\n\nItem pass 2:\n'+i2.data.text.trim();
  $('ocr-quality').textContent='Total confidence: '+Math.round(Math.min(t.data.confidence,t2.data.confidence))+'% · Item text: '+Math.round(chosen.confidence)+'%'+(a!==b?' · Total readings disagree':'');
- return{total,raw:i.data.text+'\n'+i2.data.text,items:chosen.items,itemReliable:chosen.itemReliable,confidence:Math.min(t.data.confidence,t2.data.confidence),picture};
+ return{total,balance,rawFirst:i.data.text,rawSecond:i2.data.text,raw:i.data.text+'\n'+i2.data.text,items:chosen.items,itemReliable:chosen.itemReliable,confidence:Math.min(t.data.confidence,t2.data.confidence),picture};
 }
 $('read').onclick=async()=>{if(busy)return;busy=true;checking=true;controls();try{const r=await reading();status(r.total===null||r.confidence<65?'The total is unclear. Select a tighter area around the number, then check again.':'Reading complete. Compare the total and item text with your game before starting.',r.total===null||r.confidence<65);}catch(e){status(e.message,true);}finally{busy=false;checking=false;controls();}};
 async function tick(){
  if(!watching)return;if(busy){timer=setTimeout(tick,1500);return;}if(redetect){redetect=false;await autoDetect(true);if(!watching)return;}busy=true;controls();
  try{
   const r=await reading();if(!watching)return;
-  const result=observe(state,r);unreadable=result.kind==='unreadable'?unreadable+1:0;{const sig=regionSig();if(unreadable>=2||sigDiff(layoutSig,sig)>40){redetect=true;unreadable=0;}layoutSig=sig;}
+  const result=observeStore(state,r);unreadable=result.kind==='unreadable'?unreadable+1:0;{const sig=regionSig();if(unreadable>=2||sigDiff(layoutSig,sig)>40){redetect=true;unreadable=0;}layoutSig=sig;}
   if(result.kind==='reset'){stop('The sales total decreased. Check the shop, then restart with a new baseline.');return;}
   state=result.state;
+  baselineNote.textContent=state.initialBalance===null?'Session starting mesos: not set':'Session starting mesos: '+fmt(state.initialBalance)+' · current change: '+(r.balance===null?'unreadable':fmt(r.balance-state.initialBalance))+' mesos';
   if(result.kind==='unreadable')status('Sales total unclear. No sale alert sent; checking again next time.',true);
   else if(result.kind==='sale'){
    const names=result.names.length?result.names.join(', '):'Item text unclear — see the Sold Items snapshot';
-   const saleKey=String(result.state?.total??state.total);
+   const saleKey=state.id+':'+String(state.total);
    if(notified.has(saleKey)){status('That sale was already recorded. Still watching your store.');return;}
    notified.add(saleKey);
-   const entry={time:new Date().toISOString(),names,amount:result.amount,delivery:$('webhook').value.trim()?'Sending':'Recorded (Discord not connected)'};sales.unshift(entry);renderSales();
-   shareSale(result,r).then(t=>{if(t){entry.shared=t;renderSales();}});
+   const entry={time:new Date().toISOString(),sessionId:state.id,initialBalance:state.initialBalance,names,amount:result.amount,evidence:result.reason,corroborated:result.corroborated,delivery:$('webhook').value.trim()?'Sending':'Recorded (Discord not connected)'};sales.unshift(entry);renderSales();
+   if(result.corroborated)shareSale(result,r).then(t=>{if(t){entry.shared=t;renderSales();}});
+   if(!result.corroborated){entry.delivery='Unverified · no Discord sale alert or market contribution';status(result.reason,true);renderSales();if(watching&&$('chat-alerts').checked&&$('webhook').value.trim())await checkChat();return;}
    if($('webhook').value.trim())try{
-    await send('MapleStory Classic · sale detected\nItems: '+names.slice(0,1000)+'\nSales total increased by '+fmt(result.amount)+' mesos.\n'+new Date().toLocaleString()+'\nSeveral purchases may be grouped. See the attached Sold Items snapshot.',r.picture,'sold-items.png');
+    await send('MapleStory Classic · sale evidence corroborated\nItems: '+names.slice(0,1000)+'\nSales total increased by '+fmt(result.amount)+' mesos.\n'+new Date().toLocaleString()+'\nSeveral purchases may be grouped. See the attached Sold Items snapshot.',r.picture,'sold-items.png');
     entry.delivery='Sent to Discord';status('Sale snapshot sent. Still watching your store.');
    }catch(e){entry.delivery='Delivery failed — not retried';stop('Sale snapshot delivery failed. Check your webhook, then restart. '+e.message);$('status').classList.add('error');}
    else status('Sale recorded. Connect Discord under Discord Integration to get notified.');
@@ -120,9 +126,9 @@ async function checkChat(){
  }else $('chat-status').textContent=result.kind==='unreadable'?'Chat text is unclear. Keep the selected area visible.':result.kind==='pending'?'New chat text detected; confirming the reading…':result.kind==='reset'?'Chat history changed or scrolled. Baseline reset; keep chat at the bottom.':result.kind==='baseline'?'Chat baseline set. Existing messages will not trigger alerts.':'Watching shop chat · '+chatCount+' new message(s) sent.';
 }
 
-$('start').onclick=async()=>{try{if($('webhook').value.trim())validWebhook();if(!regions.total||!regions.items)throw Error('Select both reading areas first.');if($('chat-alerts').checked&&$('webhook').value.trim()&&!regions.chat){selectRegion('chat');throw Error('Select the shop-chat area once before starting message alerts.');}chatState={ready:false,keys:[],candidate:null};$('capture-details').open=false;$('crop-details').open=false;state={total:null,items:'',candidate:null};watching=true;mode=null;drag=null;$('badge').classList.add('live');$('badge').replaceChildren(Object.assign(document.createElement('span'),{className:'dot'}),document.createTextNode(' Watching'));controls();await tick();}catch(e){stop(e.message);$('status').classList.add('error');}};
-function row(entry,example=false){const r=document.createElement('div');r.className='sale-row';const time=document.createElement('time');time.textContent=new Date(entry.time).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});const text=document.createElement('div'),name=document.createElement('strong'),note=document.createElement('small');name.textContent=entry.names;note.textContent=example?'Example only · no Discord message sent':entry.delivery+' · OCR reading';text.append(name,note);const amount=document.createElement('div');amount.className='amount';amount.textContent='+'+fmt(entry.amount)+' mesos';r.append(time,text,amount);return r;}
-function renderSales(){try{localStorage.setItem('mw-sales',JSON.stringify(sales.slice(0,500)));}catch{}$('activity-empty').hidden=sales.length>0;$('sales').replaceChildren(...sales.map(s=>row(s)));$('sale-count').textContent=String(sales.length);$('meso-count').replaceChildren(document.createTextNode(fmt(sales.reduce((a,s)=>a+s.amount,0))+' '),Object.assign(document.createElement('small'),{textContent:'mesos'}));$('export').disabled=!sales.length;}
+$('start').onclick=async()=>{try{if($('webhook').value.trim())validWebhook();if(!regions.total||!regions.items||!regions.balance)throw Error('Select Sold Items, Total Sales and personal mesos before starting.');if($('chat-alerts').checked&&$('webhook').value.trim()&&!regions.chat){selectRegion('chat');throw Error('Select the shop-chat area once before starting message alerts.');}chatState={ready:false,keys:[],candidate:null};$('capture-details').open=false;$('crop-details').open=false;state=createSession(crypto.randomUUID());baselineNote.textContent='Session starting mesos: waiting for a reliable reading';watching=true;mode=null;drag=null;$('badge').classList.add('live');$('badge').replaceChildren(Object.assign(document.createElement('span'),{className:'dot'}),document.createTextNode(' Watching'));controls();await tick();}catch(e){stop(e.message);$('status').classList.add('error');}};
+function row(entry,example=false){const r=document.createElement('div');r.className='sale-row';const time=document.createElement('time');time.textContent=new Date(entry.time).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});const text=document.createElement('div'),name=document.createElement('strong'),note=document.createElement('small');name.textContent=entry.names;note.textContent=example?'Example only · no Discord message sent':entry.delivery+' · OCR reading';text.append(name,note);const amount=document.createElement('div');amount.className='amount';amount.replaceChildren(mesoAmt('+'+fmt(entry.amount)+' mesos',13));r.append(time,text,amount);return r;}
+function renderSales(){try{localStorage.setItem('mw-sales',JSON.stringify(sales.slice(0,500)));}catch{}$('activity-empty').hidden=sales.length>0;$('sales').replaceChildren(...sales.map(s=>row(s)));$('sale-count').textContent=String(sales.filter(s=>s.corroborated===true).length);$('meso-count').replaceChildren(mesoAmt(fmt(sales.filter(s=>s.corroborated===true).reduce((a,s)=>a+s.amount,0)),13),document.createTextNode(' '),Object.assign(document.createElement('small'),{textContent:'mesos'}));$('export').disabled=!sales.length;}
 $('demo').onclick=()=>{if(sales.length)return;$('sales').replaceChildren(row({time:new Date().toISOString(),names:'Example: Steelies',amount:2500000},true));$('demo').textContent='Example shown below';};
 $('export').onclick=()=>{const safe=s=>{let v=String(s);if(/^[=+@\-\t\r]/.test(v))v="'"+v;return'"'+v.replaceAll('"','""')+'"';};const csv='Time,Items,Total increase (mesos),Delivery\r\n'+sales.map(s=>[s.time,s.names,s.amount,s.delivery].map(safe).join(',')).join('\r\n');const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download='mesoswatch-sales.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
 function safeLink(value){try{const u=new URL(value);return u.protocol==='https:'?u.href:null;}catch{return null;}}
@@ -131,14 +137,15 @@ const sponsor=config.sponsor||{},link=safeLink(sponsor.url);if(link&&sponsor.tit
 window.addEventListener('beforeunload',e=>{if(watching){e.preventDefault();e.returnValue='';}});
 window.addEventListener('pagehide',()=>{clearTimeout(timer);cancelAnimationFrame(frame);stream?.getTracks().forEach(t=>t.stop());worker?.terminate();});
 async function readBalance(w){
- if(!regions.balance)return;
+ if(!regions.balance)return null;
  showCrop('balance-crop',crop('balance',2));
  await w.setParameters({tessedit_pageseg_mode:'7',tessedit_char_whitelist:'0123456789, .'});
  const source=crop('balance',4),a=await w.recognize(prepare(source)),b=await w.recognize(prepare(source,true));
  const first=parseTotal(a.data.text),second=parseTotal(b.data.text);
  const reliable=first!==null&&first===second&&Math.min(a.data.confidence,b.data.confidence)>=65;
- $('balance-reading').textContent=reliable?fmt(first):'Unclear';
+ $('balance-reading').replaceChildren(reliable?mesoAmt(fmt(first),15):document.createTextNode('Unclear'));
  $('balance-note').textContent=reliable?'Personal mesos · checked '+new Date().toLocaleTimeString():'Balance unreadable. Keep inventory visible or reselect the digits.';
+ return reliable?first:null;
 }
 async function autoDetect(background=false){
  if(!stream||busy||(watching&&!background))return;
@@ -154,7 +161,9 @@ async function autoDetect(background=false){
   const coinScore=coinScorer(pixels,scale);
   const found=locateRegions(tsvWords(result.data.tsv),c.width,c.height,scale,coinScore);
   if(!stream)return;
-  regions=background?{...regions,...found}:{...found,...(regions.chat?{chat:regions.chat}:{})};layoutSig=regionSig();
+  if(background&&(!found.total||!found.items||!found.balance)){stop('Could not relocate all store evidence areas. Review Auto Select before restarting.');return;}
+  if(background&&regions.chat&&regions.sale&&found.sale&&['x','y','w','h'].some(k=>Math.abs(regions.sale[k]-found.sale[k])>5)){stop('Store layout moved. Reselect shop chat before restarting to avoid sending the wrong area.');return;}
+  regions={...found,...(regions.chat?{chat:regions.chat}:{})};layoutSig=regionSig();
   if(background){status(found.total?'Your windows moved. Areas re-detected automatically; still watching.':'Your windows moved and the Sales total could not be found again. Keep Sold Items visible or select it manually.',!found.total);return;}
   if(regions.total&&regions.items)await reading();else if(regions.balance)await readBalance(w);
   const missing=[];if(!found.total||!found.items)missing.push('Sold Items / Total Sales');if(!found.balance)missing.push('personal mesos');
@@ -186,10 +195,11 @@ window.addEventListener('mesoswatch:clear-sales',()=>{sales=[];renderSales();});
 // A confirmed sale goes to the price board only when the evidence is unambiguous: one item name read reliably and the
 // "Number purchased" visible, so the per-item price is the sales-total increase divided by that count.
 async function shareSale(result,r){
- if(!$('share-sales')?.checked||!boardConfigured())return'';
+ if(!result.corroborated||!$('share-sales')?.checked||!boardConfigured())return'';
  // "Number" is often misread ("Murnber", "Humber"); "purchased: N" is the reliable part.
  const counts=[...String(r.raw||'').matchAll(/purchased\s*[:;]?\s*(\d{1,4})\b/gi)].map(m=>+m[1]);
  if(result.names.length!==1||!r.itemReliable||!counts.length||new Set(counts).size!==1)return'';
- const qty=counts[0],price=Math.round(result.amount/qty);
+ const qty=result.quantity,price=result.amount/qty;
+ if(!Number.isSafeInteger(price)||price<=0)return'';
  try{const n=await reportObservations([{kind:'sale',item:result.names[0],price,qty}],{world:$('world')?.value||''});return n&&n.length?'Shared to price board':'';}catch(e){return'Not shared: '+e.message;}
 }

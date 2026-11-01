@@ -1,0 +1,36 @@
+import assert from 'node:assert/strict';
+import {createSession,observeStore} from '../dist/store-session.mjs';
+import {locateRegions} from '../dist/locate.mjs';
+import {tsvWords} from '../dist/locate.mjs';
+import fs from 'node:fs';
+const fixture=tsvWords(fs.readFileSync(new URL('./fixtures/store-3x.tsv',import.meta.url),'utf8'));
+const missingSales=fixture.filter(w=>!(w.y===324&&/^13,679$/.test(w.text)));
+assert.equal(locateRegions(missingSales,2268,1380,3).total,undefined,'never substitute the lower Received number for a missing Sales number');
+const base={total:100,balance:1000,items:'Old Scroll',itemReliable:true,confidence:95,rawFirst:'Number purchased: 1',rawSecond:'Number purchased: 1'};
+let s=createSession('one');
+assert.equal(observeStore(s,{...base,balance:null}).kind,'unreadable');
+let r=observeStore(s,base);s=r.state;
+assert.equal(s.initialBalance,1000);assert.ok(Object.isFrozen(s));
+assert.throws(()=>{s.initialBalance=999;},TypeError);
+r=observeStore(s,{...base,balance:900});assert.equal(r.kind,'unchanged');s=r.state;
+assert.equal(s.initialBalance,1000);assert.equal(s.balanceAtTotal,900);
+const sale={...base,total:200,balance:1000,items:'Old Scroll\nNew Scroll'};
+r=observeStore(s,sale);assert.equal(r.kind,'pending');s=r.state;
+r=observeStore(s,sale);assert.equal(r.kind,'sale');assert.equal(r.corroborated,true);assert.equal(r.quantity,1);assert.equal(r.amount,100);s=r.state;
+assert.equal(s.initialBalance,1000);assert.equal(observeStore(s,sale).kind,'unchanged');
+assert.equal(observeStore(s,{...sale,total:0}).kind,'reset');
+for(const patch of [{balance:1050},{items:'Old Scroll\nNew Scroll',itemReliable:false},{rawSecond:'Number purchased: 2'},{rawFirst:'Number purchased: 0',rawSecond:'Number purchased: 0'},{rawFirst:'Number purchased: 3',rawSecond:'Number purchased: 3'}]){
+ const seed=observeStore(createSession('test'),base).state,changed={...sale,balance:1100,...patch};
+ const pending=observeStore(seed,changed);
+ assert.equal(observeStore(pending.state,changed).corroborated,false);
+}
+let pending=observeStore(observeStore(createSession('noise'),base).state,sale);
+r=observeStore(pending.state,{...sale,balance:1100});assert.equal(r.kind,'pending','evidence must stabilize as well as total');
+r=observeStore(r.state,{...sale,balance:1100});assert.equal(r.corroborated,true);
+assert.equal(observeStore(s,{...sale,balance:2000,total:200}).kind,'unchanged','balance-only increases are not sales');
+assert.equal(observeStore(s,{...sale,balance:NaN}).kind,'unreadable');
+assert.equal(observeStore(s,{...sale,balance:1000,total:300,confidence:20}).kind,'unreadable');
+assert.equal(createSession('new').initialBalance,null,'restart creates a separate session');
+assert.deepEqual(locateRegions([],100,100,0),{});
+assert.deepEqual(locateRegions([{text:'Total Sales',x:NaN,y:10,w:10,h:10,confidence:99}],100,100),{});
+console.log('Phase 3: immutable baseline, evidence agreement, uncertain sales, stable evidence, balance-only changes and invalid geometry passed.');

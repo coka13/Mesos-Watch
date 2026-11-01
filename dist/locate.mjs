@@ -37,6 +37,8 @@ function amount(w){
  return{...w,text:m[1],x:w.x+lead*per,w:m[1].length*per,value};}
 
 export function locateRegions(words,width,height,scale=1,coinScore=()=>0){
+ if(!Number.isFinite(scale)||scale<=0||!Number.isFinite(width)||!Number.isFinite(height)||width<=0||height<=0)return{};
+ words=words.filter(w=>[w.x,w.y,w.w,w.h,w.confidence].every(Number.isFinite)&&w.w>0&&w.h>0&&w.x>=0&&w.y>=0&&w.x+w.w<=width&&w.y+w.h<=height);
  const lines=rowsOf(words);
  const totalLabel=phrase(lines,{source:TOTAL},{source:SALES}),receivedLabel=phrase(lines,{source:TOTAL},{source:RECEIVED});
  const result={};let shop=null;
@@ -50,7 +52,8 @@ export function locateRegions(words,width,height,scale=1,coinScore=()=>0){
   // Side by side (one number under "Total Sales") or stacked (Total Sales above Total Received, which is the sales total less the fee).
   const top=nums[0],second=nums[1];
   const stackedOk=top&&second&&second.y>top.y+top.h*.6&&second.value<=top.value;
-  if(top&&(nums.length===1||stackedOk)&&!nums.some(n=>n!==top&&Math.abs(n.y-top.y)<top.h*.6))result.total=rect({x:top.x-2*scale,y:top.y-2*scale,w:top.w+4*scale,h:top.h+4*scale});
+  const closeToLabel=top&&top.y<=totalLabel.y+totalLabel.h*2.5;
+  if(top&&closeToLabel&&(nums.length===1||stackedOk)&&!nums.some(n=>n!==top&&Math.abs(n.y-top.y)<top.h*.6))result.total=rect({x:top.x-2*scale,y:top.y-2*scale,w:top.w+4*scale,h:top.h+4*scale});
   // Label found but its number unreadable in the full-screen pass: use the line just under the label.
   else if(!nums.length){result.total=rect({x:totalLabel.x-2*scale,y:totalLabel.y+totalLabel.h+1*scale,w:Math.min(Math.max(totalLabel.w,90*scale),limit-totalLabel.x)+4*scale,h:totalLabel.h*1.5});result.totalEstimated=true;}
   // The sold-items list sits above the totals in the same column: each entry is a name, "Buyer: …" and "Number purchased: …".
