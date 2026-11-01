@@ -1,23 +1,92 @@
 import {parseTotal} from './detection.mjs';
 export function tsvWords(tsv){return String(tsv||'').split('\n').slice(1).map(row=>{const c=row.split('\t');return{level:+c[0],group:c.slice(1,5).join('-'),x:+c[6],y:+c[7],w:+c[8],h:+c[9],confidence:+c[10],text:c.slice(11).join('\t').trim()};}).filter(w=>w.level===5&&w.text&&w.w>0&&w.h>0);}
 function union(words){const x=Math.min(...words.map(w=>w.x)),y=Math.min(...words.map(w=>w.y));return{x,y,w:Math.max(...words.map(w=>w.x+w.w))-x,h:Math.max(...words.map(w=>w.y+w.h))-y};}
-function phrase(words,a,b){for(let i=0;i<words.length-1;i++)if(a.test(words[i].text)&&b.test(words[i+1].text)&&Math.abs(words[i].y-words[i+1].y)<Math.max(words[i].h,words[i+1].h))return union(words.slice(i,i+2));return null;}
+
+// Visual lines built from word geometry. Tesseract's own line ids split one row into several groups in sparse mode (psm 11),
+// so words are joined when their vertical centres line up and the gap between them is small relative to the text height.
+export function rowsOf(words){
+ const sorted=[...words].sort((a,b)=>(a.y+a.h/2)-(b.y+b.h/2)||a.x-b.x),rows=[];
+ // Item sprites are often read as one tall "letter" spanning a name row and the price row below it; such outliers stand alone.
+ const hs=words.map(w=>w.h).sort((a,b)=>a-b),medH=hs[Math.floor(hs.length/2)]||1;
+ for(const w of sorted){const cy=w.y+w.h/2;if(w.h>medH*1.8){rows.push({cy,h:w.h,words:[w],solo:true});continue;}
+  const row=rows.find(r=>!r.solo&&Math.abs(r.cy-cy)<Math.min(r.h,w.h)*.6);if(row){row.words.push(w);row.cy=(row.cy*(row.words.length-1)+cy)/row.words.length;row.h=Math.max(row.h,w.h);}else rows.push({cy,h:w.h,words:[w]});}
+ const lines=[];
+ for(const row of rows){
+  row.words.sort((a,b)=>a.x-b.x);let seg=[row.words[0]];
+  const flush=()=>{const u=union(seg);lines.push({words:seg,text:seg.map(w=>w.text).join(' '),conf:Math.min(...seg.map(w=>w.confidence)),...u});};
+  for(const w of row.words.slice(1)){const prev=seg[seg.length-1];if(w.x-(prev.x+prev.w)>Math.max(prev.h,w.h)*2.2){flush();seg=[w];}else seg.push(w);}
+  flush();
+ }
+ return lines.sort((a,b)=>a.y-b.y||a.x-b.x);
+}
+// A label read as two words ("Total" "Sales") or fused into one ("TotalSales"). OCR often swaps l/1/i/| and o/0 in the
+// game font, so words are folded before matching.
+const fold=t=>t.toLowerCase().replace(/[0]/g,'o').replace(/[1|!]/g,'l');
+function phrase(lines,a,b){
+ for(const line of lines){const ws=line.words;
+  for(let i=0;i<ws.length;i++){const one=fold(ws[i].text);
+   if(new RegExp('^'+a.source+b.source+'$').test(one))return union([ws[i]]);
+   if(i<ws.length-1&&new RegExp('^'+a.source+'$').test(one)&&new RegExp('^'+b.source+'$').test(fold(ws[i+1].text)))return union(ws.slice(i,i+2));}}
+ return null;}
+const TOTAL='tota[li]',SALES='sa[li]es?[:;]?',RECEIVED='re[cg]e[il]ved[:;]?';
+// Digits inside a word such as "13,679mesos" or "13,679)": the value, and the word's box trimmed to just the digits.
+function amount(w){
+ const m=w.text.match(/^[^\d]{0,2}(\d[\d,. ]*\d|\d)[^\d]*$/);if(!m)return null;
+ const value=parseTotal(m[1]);if(value===null)return null;
+ const per=w.w/Math.max(1,w.text.length),lead=w.text.indexOf(m[1]);
+ return{...w,text:m[1],x:w.x+lead*per,w:m[1].length*per,value};}
+
 export function locateRegions(words,width,height,scale=1,coinScore=()=>0){
- const groups=new Map();for(const word of words){const row=groups.get(word.group)||[];row.push(word);groups.set(word.group,row);}const lines=[...groups.values()].map(ws=>({words:ws.sort((a,b)=>a.x-b.x),text:ws.map(w=>w.text).join(' '),...union(ws)}));
- let totalLabel=null,receivedLabel=null,soldTitle=null;
- for(const line of lines){totalLabel ||= phrase(line.words,/^total$/i,/^sales?[:;]?$/i);receivedLabel ||= phrase(line.words,/^total$/i,/^received[:;]?$/i);if(/sold\s*[il]tems/i.test(line.text))soldTitle=line;}
+ const lines=rowsOf(words);
+ const totalLabel=phrase(lines,{source:TOTAL},{source:SALES}),receivedLabel=phrase(lines,{source:TOTAL},{source:RECEIVED});
  const result={};let shop=null;
- const rect=r=>({x:Math.max(0,Math.floor(r.x/scale)),y:Math.max(0,Math.floor(r.y/scale)),w:Math.max(1,Math.ceil(Math.min(r.w,width-r.x)/scale)),h:Math.max(1,Math.ceil(Math.min(r.h,height-r.y)/scale))});
- if(totalLabel&&receivedLabel&&Math.abs(totalLabel.y-receivedLabel.y)<30*scale&&receivedLabel.x>totalLabel.x){
-  const left=totalLabel.x-10*scale,right=receivedLabel.x+receivedLabel.w+12*scale;
-  const nums=words.filter(w=>w.confidence>=65&&parseTotal(w.text)!==null&&w.x>=left&&w.x+w.w<receivedLabel.x&&w.y>=totalLabel.y+totalLabel.h*.6&&w.y<totalLabel.y+65*scale).sort((a,b)=>a.y-b.y);
-  if(nums.length===1)result.total=rect({x:nums[0].x-2*scale,y:nums[0].y-2*scale,w:nums[0].w+4*scale,h:nums[0].h+4*scale});
-  const title=soldTitle&&soldTitle.y<totalLabel.y&&soldTitle.x<right&&soldTitle.x+soldTitle.w>left?soldTitle:null;
-  if(title){shop={x:left,y:title.y-6*scale,w:right-left,h:totalLabel.y+75*scale-title.y};const top=title.y+title.h+5*scale;if(totalLabel.y-top>15*scale)result.items=rect({x:left+4*scale,y:top,w:right-left-8*scale,h:totalLabel.y-top-4*scale});}
+ const rect=r=>{const x=Math.max(0,r.x),y=Math.max(0,r.y);return{x:Math.floor(x/scale),y:Math.floor(y/scale),w:Math.max(1,Math.ceil(Math.min(r.w-(x-r.x),width-x)/scale)),h:Math.max(1,Math.ceil(Math.min(r.h-(y-r.y),height-y)/scale))};};
+ if(totalLabel){
+  const sameRow=receivedLabel&&Math.abs(totalLabel.y-receivedLabel.y)<totalLabel.h&&receivedLabel.x>totalLabel.x;
+  const left=totalLabel.x-10*scale,limit=sameRow?receivedLabel.x:totalLabel.x+260*scale;
+  const under=words.map(amount).filter(w=>w&&w.x>=left&&w.x+w.w<limit&&w.y>=totalLabel.y+totalLabel.h*.6&&w.y<totalLabel.y+65*scale);
+  // Prefer confident readings; the game's small digits sometimes score low, and the total is read twice again before use.
+  const sure=under.filter(w=>w.confidence>=65),nums=(sure.length?sure:under.filter(w=>w.confidence>=30)).sort((a,b)=>a.y-b.y||a.x-b.x);
+  // Side by side (one number under "Total Sales") or stacked (Total Sales above Total Received, which is the sales total less the fee).
+  const top=nums[0],second=nums[1];
+  const stackedOk=top&&second&&second.y>top.y+top.h*.6&&second.value<=top.value;
+  if(top&&(nums.length===1||stackedOk)&&!nums.some(n=>n!==top&&Math.abs(n.y-top.y)<top.h*.6))result.total=rect({x:top.x-2*scale,y:top.y-2*scale,w:top.w+4*scale,h:top.h+4*scale});
+  // Label found but its number unreadable in the full-screen pass: use the line just under the label.
+  else if(!nums.length){result.total=rect({x:totalLabel.x-2*scale,y:totalLabel.y+totalLabel.h+1*scale,w:Math.min(Math.max(totalLabel.w,90*scale),limit-totalLabel.x)+4*scale,h:totalLabel.h*1.5});result.totalEstimated=true;}
+  // The sold-items list sits above the totals in the same column: each entry is a name, "Buyer: …" and "Number purchased: …".
+  const column=l=>l.x>=left-4*scale&&l.x<totalLabel.x+60*scale&&l.y<totalLabel.y;
+  const buyers=lines.filter(l=>column(l)&&/^(buyer|number\s*purchased)\b/i.test(l.text)).sort((a,b)=>a.y-b.y);
+  const title=lines.find(l=>/sold\s*[il]tems/i.test(l.text)&&l.y<totalLabel.y&&l.x<totalLabel.x+260*scale&&l.x+l.w>left);
+  const entryH=totalLabel.h*4.8;
+  let listTop=null;
+  if(buyers.length){const first=buyers[0];const name=lines.filter(l=>column(l)&&l.y<first.y&&first.y-l.y<first.h*2.4).sort((a,b)=>b.y-a.y)[0];listTop=(name||first).y-4*scale;}
+  else if(title)listTop=title.y+title.h+5*scale;
+  else listTop=Math.max(0,totalLabel.y-entryH*2);  // no sales yet: an estimate, refreshed when the window changes
+  const inList=lines.filter(l=>column(l)&&l.y>=listTop&&l.y<totalLabel.y);
+  const right=Math.max(totalLabel.x+totalLabel.w,receivedLabel?receivedLabel.x+receivedLabel.w:0,...inList.map(l=>l.x+l.w))+12*scale;
+  const bottom=Math.max(totalLabel.y+totalLabel.h,...nums.map(n=>n.y+n.h))+8*scale;
+  if(totalLabel.y-listTop>15*scale){result.items=rect({x:left+4*scale,y:listTop,w:right-left-8*scale,h:totalLabel.y-listTop-4*scale});result.itemsEstimated=!buyers.length&&!title;}
+  shop={x:left,y:Math.min(listTop,title?title.y-6*scale:listTop)-4*scale,w:right-left};shop.h=bottom-shop.y;
+  result.sale=rect(shop);
  }
  const inventory=lines.find(l=>/\binventory\b/i.test(l.text));
- const money=words.filter(w=>w.confidence>=70&&parseTotal(w.text)!==null&&w.w>=w.h&&(!shop||w.x<shop.x||w.x>shop.x+shop.w||w.y<shop.y||w.y>shop.y+shop.h)).filter(w=>!inventory||(w.y>inventory.y&&w.y<inventory.y+450*scale&&Math.abs(w.x-inventory.x)<230*scale)).map(w=>({word:w,score:coinScore(w)})).filter(c=>c.score>=.025).sort((a,b)=>b.score-a.score);
+ const followedByMesos=w=>words.some(o=>/^m[e3]s[o0]s?$/i.test(o.text)&&o.x>w.x+w.w&&o.x-(w.x+w.w)<w.h*1.5&&Math.abs(o.y-w.y)<w.h*.6);
+ // The balance box's border often drags OCR confidence to 0 ("50,615)"), so a strong gold-coin match may stand in for confidence;
+ // the balance itself is then read from the crop twice with a digit-only pass before it is shown.
+ const digits=w=>parseTotal(w.text.replace(/^[^\d]+|[^\d]+$/g,''));
+ const money=words.filter(w=>digits(w)!==null&&w.w>=w.h*.8&&!followedByMesos(w)&&(!shop||w.x<shop.x||w.x>shop.x+shop.w||w.y<shop.y||w.y>shop.y+shop.h)).filter(w=>!inventory||(w.y>inventory.y&&w.y<inventory.y+450*scale&&Math.abs(w.x-inventory.x)<230*scale)).map(w=>({word:w,score:coinScore(w)})).filter(c=>c.score>=.025).sort((a,b)=>b.score-a.score);
  // Never choose between multiple money-looking fields without a clear winner.
- if(money.length===1){const w=money[0].word;result.balance=rect({x:w.x-2*scale,y:w.y-2*scale,w:w.w+4*scale,h:w.h+4*scale});}
+ if(money.length===1||(money.length>1&&money[0].score>=money[1].score*2.5)){const w=money[0].word;result.balance=rect({x:w.x-2*scale,y:w.y-2*scale,w:w.w+4*scale,h:w.h+4*scale});}
  return result;
 }
+
+// Share of gold-coin pixels to the left of a number, from RGBA pixels of the scaled frame. The balance box right-aligns its
+// digits, so the coin can sit ~55px (unscaled) left of them.
+export function coinScorer({data,width,height},scale=1){
+ return word=>{const left=Math.max(0,Math.floor(word.x-70*scale)),right=Math.max(0,Math.floor(word.x-2*scale)),top=Math.max(0,Math.floor(word.y-4*scale)),bottom=Math.min(height,Math.ceil(word.y+word.h+4*scale));
+  let gold=0,total=0;for(let y=top;y<bottom;y+=2)for(let x=left;x<right;x+=2){const p=(y*width+x)*4,r=data[p],g=data[p+1],b=data[p+2];if(r>165&&g>100&&g<r*.96&&b<135&&r-b>60)gold++;total++;}
+  return total?gold/total:0;};
+}
+
+// OCR scale for a full frame: the game's ~11px text needs at least 2x, capped so huge captures stay fast.
+export const frameScale=width=>Math.min(3,Math.max(2,3840/Math.max(1,width)));

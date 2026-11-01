@@ -1,0 +1,14 @@
+{
+  "name": "mesos-watch",
+  "private": true,
+  "type": "module",
+  "description": "MapleStory Classic community FM price checker. The site is the static dist/ folder; supabase/ holds the database and payment functions.",
+  "scripts": {
+    "test": "node check.mjs && node supabase/tests/sql.test.mjs",
+    "import-catalog": "node supabase/import-catalog.mjs"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.2.17",
+    "pg": "^8.23.1"
+  }
+}

@@ -1,0 +1,202 @@
+/* MapleStory UI theme: overrides maple.css and ocr.css. Load last.
+   The login screen, not a blue dialog: wood frames, cream insets, plank buttons, gold lettering,
+   the world.svg scene behind with clouds and falling leaves. Headings carry the logo's brown outline. */
+@font-face{font-family:"Maplestory OTF";src:url(fonts/Maplestory_OTF_Light.woff2) format("woff2"),url(fonts/Maplestory_OTF_Light.woff) format("woff");font-weight:300 400;font-style:normal;font-display:swap}
+@font-face{font-family:"Maplestory OTF";src:url(fonts/Maplestory_OTF_Bold.woff2) format("woff2"),url(fonts/Maplestory_OTF_Bold.woff) format("woff");font-weight:500 900;font-style:normal;font-display:swap}
+:root{
+ /* wood */
+ --wood:#9a6428;--wood-lite:#c9944f;--wood-pale:#e0b878;--wood-dark:#5a3616;--wood-deep:#3d2410;
+ /* cream insets */
+ --cream:#fffdf2;--cream-2:#fdf3d8;--cream-3:#f3e6c8;--cream-line:#dcc392;
+ /* ink */
+ --ink:#5c4326;--muted:#8d7554;--strip-edge:#f6e3bd;
+ /* on wood */
+ --on-wood:#fff3cf;--on-wood-dim:#e6c894;
+ /* accents */
+ --gold:#f7c53f;--gold-lite:#ffe08a;--gold-deep:#8a5a12;--maple:#d94f2b;--grass:#6a9c4a;
+ --up:#3f8f43;--down:#c0553d;--orange:#e8a12d;
+ /* shape */
+ --radius:12px;--radius-sm:7px;
+ --lift:0 4px 0 rgba(61,36,16,.32),0 10px 22px rgba(45,26,8,.22);
+ --bevel:inset 0 0 0 1px rgba(255,255,255,.75);
+ --display:"Maplestory OTF","Trebuchet MS",Tahoma,sans-serif;--text:"Maplestory OTF","Tahoma",Arial,sans-serif;
+}
+
+body{font-family:var(--text);font-weight:400;font-size:13px;color:var(--ink);background:linear-gradient(180deg,#85c5e6 0,#cfeaf0 34%,#f4f4cd 62%,#b3cf82 84%,#8eb271 100%) fixed}
+body:before{content:none}
+button,input,select,textarea{font-family:var(--text)}
+h1,h2,h3,.brand,.section-head h2,.side-card>.eyebrow,.step{font-family:var(--display);font-weight:700}
+::selection{background:var(--gold-lite);color:var(--wood-dark)}
+:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+a{color:var(--wood)}
+
+/* Sky over the world scene: sun haze, clouds and drifting maple leaves. */
+.sky{position:fixed;inset:0;pointer-events:none;z-index:0;overflow:hidden}
+.sky:before{content:"";position:absolute;inset:0;background:radial-gradient(620px 320px at 76% 2%,rgba(255,248,214,.8),rgba(255,248,214,0) 70%)}
+.cloud{position:absolute;width:190px;height:54px;border-radius:46px;background:rgba(255,255,255,.95);box-shadow:0 7px 16px rgba(96,120,80,.28),inset 0 -9px 0 rgba(224,240,248,.95)}
+.cloud:before,.cloud:after{content:"";position:absolute;border-radius:50%;background:#fff}
+.cloud:before{width:80px;height:80px;left:28px;top:-40px}
+.cloud:after{width:56px;height:56px;left:102px;top:-27px}
+.cloud.k1{left:-240px;top:9%;transform:scale(.8);animation:drift 78s linear infinite}
+.cloud.k2{left:-240px;top:26%;transform:scale(1.18);opacity:.85;animation:drift 112s linear infinite;animation-delay:-34s}
+.cloud.k3{left:-240px;top:47%;transform:scale(.6);opacity:.6;animation:drift 92s linear infinite;animation-delay:-60s}
+.cloud.k4{left:-240px;top:4%;transform:scale(1);opacity:.72;animation:drift 138s linear infinite;animation-delay:-100s}
+@keyframes drift{from{margin-left:-240px}to{margin-left:calc(100vw + 280px)}}
+/* four leaves, drawn once in a data URI so the markup stays untouched */
+.sky:after{content:"";position:absolute;inset:0;background-repeat:no-repeat;background-image:
+ url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23e2703a' d='M12 1.6l2.1 5.1 4.1-1.5-1.3 4.2 5 .9-4.2 2.2 3 4-4.7-.6-.6 4.7-3.5-3.2L8.4 20.6l.6-4.7-4.7.6 3-4L3.1 9.7l5-.9-1.3-4.2 4.1 1.5z'/%3E%3C/svg%3E"),
+ url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23d94f2b' d='M12 1.6l2.1 5.1 4.1-1.5-1.3 4.2 5 .9-4.2 2.2 3 4-4.7-.6-.6 4.7-3.5-3.2L8.4 20.6l.6-4.7-4.7.6 3-4L3.1 9.7l5-.9-1.3-4.2 4.1 1.5z'/%3E%3C/svg%3E"),
+ url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23f0a53c' d='M12 1.6l2.1 5.1 4.1-1.5-1.3 4.2 5 .9-4.2 2.2 3 4-4.7-.6-.6 4.7-3.5-3.2L8.4 20.6l.6-4.7-4.7.6 3-4L3.1 9.7l5-.9-1.3-4.2 4.1 1.5z'/%3E%3C/svg%3E"),
+ url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23c8452a' d='M12 1.6l2.1 5.1 4.1-1.5-1.3 4.2 5 .9-4.2 2.2 3 4-4.7-.6-.6 4.7-3.5-3.2L8.4 20.6l.6-4.7-4.7.6 3-4L3.1 9.7l5-.9-1.3-4.2 4.1 1.5z'/%3E%3C/svg%3E");
+ background-size:20px 20px,15px 15px,24px 24px,13px 13px;
+ background-position:12% -40px,72% -90px,38% -140px,88% -60px;
+ opacity:.85;animation:leaf-fall 26s linear infinite}
+@keyframes leaf-fall{to{background-position:2% 108vh,84% 112vh,26% 116vh,96% 106vh}}
+@media(prefers-reduced-motion:reduce){.cloud{animation:none;margin-left:6vw}.cloud.k2{margin-left:54vw}.cloud.k3{margin-left:28vw}.cloud.k4{margin-left:72vw}.sky:after{animation:none;opacity:.5;background-position:10% 12%,70% 30%,36% 6%,86% 44%}}
+.world-bar,header,main,footer{position:relative;z-index:1}
+
+/* Buttons: wooden planks with a hard bottom edge; the main action is gold-lacquered. */
+button{font:700 13px var(--display);letter-spacing:.2px;color:var(--on-wood);text-shadow:0 1px var(--wood-deep);background:linear-gradient(var(--wood-pale),var(--wood) 48%,#82521f 49%,#b3803f);border:2px solid var(--wood-dark);border-radius:var(--radius-sm);padding:8px 15px;box-shadow:inset 0 1px rgba(255,255,255,.4),0 3px 0 var(--wood-deep);transition:filter .12s,transform .08s,box-shadow .08s}
+button:hover:not(:disabled){background:linear-gradient(#f0cf96,#c08a41 48%,#a86f2c 49%,#d8ab6a);border-color:var(--gold-deep);color:#fff8dd}
+button:active:not(:disabled){transform:translateY(3px);box-shadow:inset 0 2px 3px rgba(61,36,16,.45),0 0 0 var(--wood-deep)}
+button:disabled{filter:grayscale(.55) brightness(.94);opacity:.7;cursor:not-allowed}
+.primary{font:700 14px var(--display);letter-spacing:.3px;color:var(--wood-deep);text-shadow:0 1px rgba(255,255,255,.55);background:linear-gradient(var(--gold-lite),var(--gold) 48%,#dfa321 49%,#ffd463);border:2px solid var(--gold-deep);border-radius:var(--radius-sm);padding:10px 22px;box-shadow:inset 0 1px rgba(255,255,255,.7),0 3px 0 #6d470c}
+.primary:hover:not(:disabled){background:linear-gradient(#fff0b6,#ffd15e 48%,#eeb32f 49%,#ffe29a);border-color:#6d470c}
+.secondary{font:700 12px var(--display);color:var(--wood-dark);text-shadow:0 1px rgba(255,255,255,.6);background:linear-gradient(var(--cream-2),var(--cream-3));border:2px solid var(--wood);box-shadow:inset 0 1px #fff,0 3px 0 rgba(90,54,22,.45)}
+.secondary:hover:not(:disabled){background:linear-gradient(#fff,var(--gold-lite));border-color:var(--gold-deep)}
+.region-buttons button,.activity .section-head button,.activity-empty button,.input-row button,#save-item-crop{font:700 12px var(--display);padding:7px 12px}
+
+/* Ticker bar */
+.world-bar{height:30px;background:linear-gradient(var(--wood),var(--wood-dark));border-bottom:2px solid var(--wood-deep);box-shadow:inset 0 1px rgba(255,222,160,.35);color:var(--on-wood);font:700 10px var(--display);letter-spacing:1.4px;text-transform:uppercase;text-shadow:0 1px var(--wood-deep)}
+.world-bar b{color:var(--on-wood-dim)}
+.world-bar span:last-child{font-size:10px;color:var(--cream-2)}
+.world-bar i{background:#9ae659;border:1px solid #173713;box-shadow:0 0 5px #b4f767}
+
+/* Header: the logo lettering — cream fill, thick brown outline — and nav as hanging sign tabs. */
+header{max-width:1500px;height:auto;padding:20px 28px 14px;border:0;align-items:center}
+.brand{font:700 2.1rem/1 var(--display);letter-spacing:.5px;color:#fff8e2;-webkit-text-stroke:2px var(--wood-dark);paint-order:stroke fill;text-shadow:0 3px 0 var(--wood-deep),0 6px 16px rgba(45,26,8,.35)}
+.mark{-webkit-text-stroke:0;paint-order:normal;background:linear-gradient(#ffe58a,#e8b043);border:2px solid #9c641a;color:#fff7c5;text-shadow:1px 1px #ac7326;border-radius:50%;box-shadow:inset 0 0 0 2px #fff0ae,2px 2px 0 rgba(61,36,16,.5)}
+.tag{-webkit-text-stroke:0;paint-order:normal;font:700 10px var(--display);letter-spacing:1.2px;text-transform:uppercase;color:var(--wood-deep);text-shadow:0 1px rgba(255,255,255,.5);background:linear-gradient(var(--gold-lite),var(--gold));border:1px solid var(--gold-deep);border-radius:4px;padding:4px 8px;box-shadow:0 2px 0 rgba(61,36,16,.35)}
+nav{align-self:center;margin:0 0 0 auto;gap:7px;font-family:var(--display)}
+nav a{font:700 13px var(--display);letter-spacing:.2px;color:var(--on-wood);text-shadow:0 1px var(--wood-deep);background:linear-gradient(var(--wood-lite),#7d4f1d);border:2px solid var(--wood-dark);border-radius:9px 9px 4px 4px;padding:8px 15px;box-shadow:inset 0 1px rgba(255,236,190,.45),0 3px 0 rgba(61,36,16,.5)}
+nav a:hover{text-decoration:none;color:#fff8dd;background:linear-gradient(#e0b06a,#8f5c24);border-color:var(--gold-deep)}
+nav .active{color:var(--wood-deep);text-shadow:0 1px rgba(255,255,255,.55);background:linear-gradient(var(--gold-lite),var(--gold) 55%,#e0a52b);border-color:var(--gold-deep);box-shadow:inset 0 1px #fff6d6,0 3px 0 #6d470c}
+
+/* Page heads: same outlined logo treatment as the brand. */
+main{max-width:1444px;padding:0 0 44px}
+.page-head h1,.search-hero h1{font:700 2.3rem/1.2 var(--display);color:#fff8e2;-webkit-text-stroke:2.5px var(--wood-dark);paint-order:stroke fill;text-shadow:0 4px 0 var(--wood-deep),0 8px 20px rgba(45,26,8,.3);margin:0 0 8px}
+.page-head p,.search-hero>p{font:400 14px/1.7 var(--text);color:var(--wood-dark);text-shadow:0 1px rgba(255,255,255,.55);margin:0;max-width:760px}
+
+/* Panels: cream windows set in a wood frame, with a plank title bar. */
+.workspace{grid-template-columns:minmax(0,1fr) 340px;gap:22px}
+.monitor,.activity,.side-card{background:var(--cream);border:3px solid var(--wood);border-radius:var(--radius);box-shadow:var(--bevel),var(--lift)}
+.monitor,.activity{padding:0 18px 16px}
+.side-card{padding:0 16px 16px;margin-bottom:22px}
+.section-head{position:relative;margin:0 -18px;padding:10px 14px;min-height:0;background:linear-gradient(var(--wood-lite),var(--wood) 55%,#7f5220);border-bottom:3px solid var(--wood-dark);border-radius:9px 9px 0 0;box-shadow:inset 0 1px rgba(255,232,186,.55)}
+.section-head h2{font:700 1.1rem var(--display);letter-spacing:.3px;color:#fff6d9;text-shadow:0 1px var(--wood-deep),0 2px 0 rgba(61,36,16,.5)}
+.section-head h2:before{content:"◆";color:var(--gold-lite);margin:0 9px 1px 0;font-size:11px;text-shadow:0 1px var(--wood-deep)}
+/* brass rivets in the corners of every plank */
+.section-head:after,.side-card>.eyebrow:after{content:"";position:absolute;right:9px;top:50%;width:7px;height:7px;margin-top:-3px;border-radius:50%;background:radial-gradient(circle at 34% 30%,#fff3cf,#c9944f 60%,#5a3616);box-shadow:0 0 0 1px rgba(61,36,16,.6)}
+.trend-up .section-head{background:linear-gradient(#8fc473,var(--grass) 55%,#4f7d38)}
+.trend-down .section-head{background:linear-gradient(#e08a6c,var(--maple) 55%,#a83a1f)}
+.trend-most .section-head{background:linear-gradient(var(--gold-lite),var(--gold) 55%,#cf9418)}
+.trend-most .section-head h2{color:var(--wood-deep);text-shadow:0 1px rgba(255,255,255,.5)}
+.trend-most .section-head h2:before{color:var(--wood-deep)}
+.section-head .eyebrow{font:700 9px var(--display);letter-spacing:1.2px;text-transform:uppercase;color:var(--on-wood-dim);background:none;border:0;border-radius:0;padding:0;text-shadow:0 1px var(--wood-deep);box-shadow:none}
+.side-card>.eyebrow,.support>.eyebrow{position:relative;margin:0 -16px 14px;padding:10px 14px;background:linear-gradient(var(--wood-lite),var(--wood) 55%,#7f5220);border-bottom:3px solid var(--wood-dark);border-radius:9px 9px 0 0;color:#fff6d9;font:700 1rem var(--display);letter-spacing:.3px;text-shadow:0 1px var(--wood-deep);box-shadow:inset 0 1px rgba(255,232,186,.55)}
+.pill{font:700 10px var(--display);letter-spacing:.4px;color:var(--on-wood);background:#5a3616cc;border:1px solid var(--wood-lite);border-radius:4px;padding:5px 9px;box-shadow:inset 0 1px rgba(255,232,186,.25)}
+.pill .dot{width:7px;height:7px;border:1px solid #3d2410;background:#c9b394}
+.pill.live{color:#eaffd6;border-color:#9abe78;background:#2f5c31}
+.pill.live .dot{border-color:#173713;background:#b6f861;box-shadow:0 0 5px #b4f767}
+
+/* Steps */
+.steps details{border-top:1px solid var(--cream-line)}
+.steps summary{font:700 14px var(--text);color:var(--wood-dark)}
+.steps summary small{font:400 12px var(--text);color:var(--muted)}
+.step{font:700 13px var(--display);color:var(--wood-deep);text-shadow:0 1px rgba(255,255,255,.6);background:linear-gradient(var(--gold-lite),var(--gold));border:2px solid var(--gold-deep);border-radius:var(--radius-sm);padding:5px 9px;box-shadow:0 2px 0 rgba(138,90,18,.5)}
+.step-note{font:700 10px var(--display);letter-spacing:.4px;text-transform:uppercase;color:var(--wood-deep);background:var(--cream-3);border:1px solid var(--cream-line);border-radius:4px;padding:3px 7px;box-shadow:none}
+.step-body{padding-left:46px}
+.step-body>label,.crop-previews label{font:700 11px var(--display);letter-spacing:.4px;text-transform:uppercase;color:var(--muted)}
+input[type=password],input[type=email],input[type=number],input[type=search],textarea{font:400 14px var(--text);color:var(--ink);background:var(--cream-2);border:2px solid var(--cream-line);border-radius:var(--radius-sm);padding:9px 13px;box-shadow:inset 0 2px 4px rgba(90,54,22,.13)}
+input:focus,textarea:focus{border-color:var(--gold-deep);outline:none;background:#fff;box-shadow:inset 0 2px 4px rgba(90,54,22,.1),0 0 0 3px rgba(247,197,63,.4)}
+.hint,.inline{font:400 12px/1.7 var(--text);color:var(--muted)}
+.check{font:400 13px var(--text);color:var(--ink)}
+input[type=checkbox]{accent-color:var(--wood)}
+.capture{border:2px solid var(--wood);border-radius:var(--radius-sm);background:#e9dcc0;box-shadow:inset 0 0 0 2px #fff8e2}
+.capture-empty{color:var(--muted);background:repeating-linear-gradient(0deg,transparent,transparent 23px,rgba(90,54,22,.06) 24px),repeating-linear-gradient(90deg,transparent,transparent 23px,rgba(90,54,22,.06) 24px)}
+.capture-empty strong{font:700 14px var(--display);color:var(--wood-dark)}
+.capture-empty p{font:400 12px var(--text);color:var(--muted)}
+.window-icon{color:var(--wood-lite)}
+.capture-settings>summary,.steps .ocr-diagnostics summary,.privacy summary{font:700 13px var(--display);color:var(--wood-dark)}
+
+/* Readings and metrics */
+.reading{border:1px solid var(--cream-line);border-radius:var(--radius-sm);box-shadow:var(--bevel)}
+.reading>div{background:var(--cream-2)}
+.reading>div+div{border-color:var(--cream-line)}
+.reading span,.metric>span{font:700 10px var(--display);letter-spacing:.8px;text-transform:uppercase;color:var(--muted)}
+.reading strong,.metric strong{font:700 1.35rem var(--display);color:var(--gold-deep);text-shadow:0 1px #fff}
+.reading pre{color:var(--ink)}
+.crop-previews>div,.ocr-diagnostics{background:var(--cream-2);border:1px solid var(--cream-line);border-radius:var(--radius-sm)}
+.metric{background:var(--cream-2);border:1px solid var(--cream-line);border-radius:var(--radius-sm);box-shadow:var(--bevel)}
+.metric small{font:700 11px var(--text);color:var(--muted)}
+.session-title{font:700 1.05rem var(--display);color:var(--wood-dark)}
+.meso-icon,.empty-coin{background:linear-gradient(#fff6a6,#e5b144);border:2px solid #c08e29;color:#bc8b28;box-shadow:inset 0 0 0 2px #fff5b7,0 2px 0 rgba(90,54,22,.35)}
+.session-foot{font:700 11px var(--display);letter-spacing:.3px;color:var(--muted)}
+.session-foot .dot{background:var(--grass)}
+
+/* Actions and status: the game speaks through a [System] line on a cream notice slip. */
+.watch-actions{border-top:1px solid var(--cream-line)}
+.watch-actions label{font:700 11px var(--display);letter-spacing:.4px;text-transform:uppercase;color:var(--muted)}
+.watch-actions select{font:700 12px var(--display);color:var(--wood-dark);text-shadow:none;background:var(--cream-2);border:1px solid var(--cream-line);border-radius:var(--radius-sm);padding:6px 9px}
+.watch-actions select option{color:var(--ink);background:var(--cream)}
+.status{font:400 13px/1.7 var(--text);color:var(--wood-dark);background:var(--cream-2);border:1px solid var(--cream-line);border-left:5px solid var(--wood);border-radius:var(--radius-sm);padding:9px 13px;text-shadow:none}
+.status:before{content:"[System] ";color:var(--gold-deep);font-weight:700}
+.status.error{color:#8d2f1f;background:#fdeee6;border-left-color:var(--maple)}
+.status.error:before{color:var(--maple)}
+.notice{background:var(--cream-2);border:1px solid var(--cream-line);border-radius:var(--radius-sm);color:var(--ink)}
+.notice>span{border-color:var(--gold-deep);color:var(--gold-deep)}
+.notice p{font:400 12px/1.7 var(--text)}
+
+/* Side cards */
+.support{background:var(--cream-2);border-color:var(--wood-dark)}
+.leaf{background:linear-gradient(#ffe995,#e8b144);border:2px solid #b3822b;color:#fff5be;text-shadow:1px 1px #c68b27;box-shadow:inset 0 0 0 2px #fff0b7,0 3px 0 rgba(90,54,22,.35)}
+.support h3{font:700 1.2rem/1.3 var(--display);color:var(--wood-dark)}
+.support p{font:400 13px/1.8 var(--text);color:var(--muted)}
+.donate{font:700 13px var(--display);color:var(--wood-deep);text-shadow:0 1px rgba(255,255,255,.55);background:linear-gradient(var(--gold-lite),var(--gold) 48%,#dfa321 49%,#ffd463);border:2px solid var(--gold-deep);border-radius:var(--radius-sm);box-shadow:inset 0 1px #fff6d6,0 3px 0 #6d470c}
+.donate:hover:not(:disabled){background:linear-gradient(#fff0b6,#ffd15e 48%,#eeb32f 49%,#ffe29a)}
+.support small{font:700 11px var(--text);color:var(--muted)}
+.ad-slot{background:var(--cream);border:2px dashed var(--wood-lite);border-radius:var(--radius);box-shadow:var(--bevel)}
+.ad-slot>span{font:700 10px var(--display);letter-spacing:1px;text-transform:uppercase;color:var(--muted);background:var(--cream-3);border-bottom:1px dashed var(--cream-line)}
+.ad-inner,.ad-symbol{color:var(--muted)}
+.ad-inner strong,.ad-inner p{font:700 12px var(--text)}
+.quick-tip{background:linear-gradient(var(--cream-2),var(--cream-3));border:1px solid var(--gold-deep);border-radius:var(--radius-sm);box-shadow:0 3px 0 rgba(90,54,22,.3);transform:rotate(-1deg)}
+.quick-tip .eyebrow{font:700 10px var(--display);letter-spacing:1px;text-transform:uppercase;color:var(--gold-deep)}
+.quick-tip p{font:400 13px/1.7 var(--text);color:var(--ink)}
+
+/* Activity */
+.activity{margin-top:22px}
+.activity-empty strong{font:700 1.05rem var(--display);color:var(--wood-dark)}
+.activity-empty p{font:400 13px var(--text);color:var(--muted)}
+.sale-row{font:400 14px var(--text);border-color:var(--cream-3)}
+.sale-row time,.sale-row small{font:400 12px var(--text);color:var(--muted)}
+.sale-row .amount{font-family:var(--display);font-weight:700;color:var(--gold-deep)}
+
+/* Guide, privacy, footer */
+.guide{background:var(--cream-2);border:3px solid var(--wood);border-radius:var(--radius);box-shadow:var(--bevel),var(--lift);margin-top:24px}
+.guide .eyebrow{font:700 10px var(--display);letter-spacing:1.2px;text-transform:uppercase;color:var(--gold-deep)}
+.guide h2{font:700 1.6rem var(--display);color:var(--wood-dark)}
+.guide p{font:400 14px/1.8 var(--text);color:var(--ink)}
+.guide li:before{font:700 15px var(--display);color:var(--maple)}
+.guide b{font:700 13px var(--text);color:var(--wood-dark)}
+.guide li span{font:400 13px/1.6 var(--text);color:var(--muted)}
+.privacy{background:var(--cream-2);border:1px solid var(--cream-line);border-radius:var(--radius-sm);box-shadow:var(--bevel);color:var(--muted);margin:22px 0}
+.privacy summary{color:var(--wood-dark)}
+.privacy p{font:400 13px/1.8 var(--text)}
+.privacy a{color:var(--wood)}
+footer{max-width:1444px;background:linear-gradient(var(--wood-dark),var(--wood-deep));border:3px solid var(--wood-deep);border-bottom:0;border-radius:var(--radius) var(--radius) 0 0;box-shadow:inset 0 1px rgba(255,222,160,.25);color:var(--on-wood-dim);font:400 12px var(--text)}
+footer .brand{font:700 1.2rem var(--display);color:#fff3cf;text-shadow:0 1px var(--wood-deep);-webkit-text-stroke:0;paint-order:normal}
+footer span:last-child{font:700 11px var(--display);color:var(--gold-lite);letter-spacing:.4px}
+
+@media(max-width:1500px){main,footer{margin:0 28px}}
+@media(max-width:850px){.workspace{grid-template-columns:minmax(0,1fr) 260px}.section-head{margin:0 -13px}.step-body{padding-left:0}.page-head h1,.search-hero h1{font-size:1.9rem}.brand{font-size:1.7rem}}
+@media(max-width:650px){header{padding:14px 12px 0}main,footer{margin:0 16px}.monitor,.activity{padding:0 12px 13px}.section-head{margin:0 -12px}.workspace{grid-template-columns:1fr}.page-head h1,.search-hero h1{font-size:1.6rem}.brand{font-size:1.45rem}nav a{font-size:12px;padding:7px 11px}.side-card>.eyebrow,.support>.eyebrow{margin:0 -11px 10px;font-size:.9rem}}

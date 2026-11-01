@@ -1,0 +1,9 @@
+MapleStory Bold / Light (OTF) — Nexon Corporation.
+Self-hosted from @kfonts/nexon-maplestory-otf 0.2.0 (npm), which republishes the official
+release from NEXON LEVEL UP (https://levelup.nexon.com/index.html).
+
+Licence: 넥슨 폰트 사용정책 / Nexon Font Usage Policy — https://levelup.nexon.com/index.html#policy
+Free for personal and commercial use, including web embedding. Do not resell the font files
+themselves or redistribute them as a standalone font product.
+
+Files: Maplestory_OTF_Bold.woff2 (weight 700), Maplestory_OTF_Light.woff2 (weight 300), plus .woff fallbacks.

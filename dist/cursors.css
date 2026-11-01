@@ -1,0 +1,7 @@
+/* MapleStory cursors; --mc-* are set (and animated) by cursors.mjs. Load after the other stylesheets. */
+html{cursor:var(--mc-arrow,default)}
+a[href],button,summary,select,label[for],input[type=checkbox],input[type=radio],input[type=button],input[type=submit],input[type=file],[role=button],[onclick],
+.suggest li,.mg-form .plan,.price-table th button,.price-table tbody tr:not(.price-detail){cursor:var(--mc-pointer,pointer)}
+.suggest .s-empty{cursor:var(--mc-arrow,default)}
+input:not([type=checkbox]):not([type=radio]):not([type=button]):not([type=submit]):not([type=file]):not([type=range]):not([type=color]),textarea,[contenteditable=true]{cursor:text}
+:disabled,[aria-disabled=true]{cursor:var(--mc-lock,not-allowed)}
