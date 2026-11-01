@@ -114,8 +114,9 @@ async function loadItems(){
  try{const items=await unverifiedItems();
   $('adm-items').replaceChildren(...(items.length?items.map(it=>{const gid=el('input',{type:'number',placeholder:'Game item ID',min:1000000,max:9999999,value:it.game_id||''}),name=el('input',{value:it.name,maxLength:60}),msg=el('small');
    // Names outside the Classic catalog are nearly always NX items, so NX is the default type.
-   const cat=el('select',{ariaLabel:'Item type'},...[['cash','NX'],['equip','Equipment'],['use','Use'],['setup','Setup'],['etc','Etc']].map(([v,t])=>new Option(t,v,false,v===(it.category!=='unknown'?it.category:'cash'))));
-   return el('li',{},iconEl(it,28),name,cat,gid,el('button',{textContent:'Verify',onclick:async()=>{try{await updateItem(it.id,{name:name.value.trim(),category:cat.value,game_id:gid.value?+gid.value:null,verified:true});loadItems();}catch(e){msg.textContent=e.message;}}}),el('small',{textContent:'first seen '+ago(it.first_seen)}),msg);}):[el('li',{className:'empty',textContent:'No community items waiting for review.'})]));
+   const source=el('input',{placeholder:'Classic release verification URL (https://…)',type:'url',required:true});
+   const cat=el('select',{ariaLabel:'Item type'},...[['cash','NX'],['equip','Equipment'],['use','Use'],['setup','Setup'],['etc','Etc']].map(([v,t])=>new Option(t,v,false,v===(it.category!=='unknown'?it.category:'equip'))));
+   return el('li',{},iconEl(it,28),name,cat,gid,source,el('button',{textContent:'Verify',onclick:async()=>{try{if(!/^https:\/\//.test(source.value.trim()))throw Error('Provide a release verification source URL.');await updateItem(it.id,{name:name.value.trim(),category:cat.value,game_id:gid.value?+gid.value:null,verified:true,release_status:'released',last_verified_at:new Date().toISOString(),verification_source:source.value.trim()});loadItems();}catch(e){msg.textContent=e.message;}}}),el('small',{textContent:'first seen '+ago(it.first_seen)}),msg);}):[el('li',{className:'empty',textContent:'No community items waiting for review.'})]));
  }catch(e){$('adm-items').replaceChildren(el('li',{className:'empty error',textContent:e.message}));}
 }
 // Two-step confirm built into the page (no browser dialogs).

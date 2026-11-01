@@ -140,7 +140,7 @@ export async function adminSignIn(email){const sb=await client();const {error}=a
 export async function adminState(){if(!configured())return{email:null,admin:false};const sb=await client();const {data}=await sb.auth.getUser();const email=data.user?.email||null;if(!email)return{email:null,admin:false};const {data:admin}=await sb.rpc('is_admin');return{email,admin:!!admin};}
 export async function signOut(){const sb=await client();await sb.auth.signOut();sessionPromise=null;}
 export const moderationQueue=async()=>rows((await client()).from('megaphone_queue').select('*').in('display_status',['paid_pending_review','queued','live','awaiting_payment']).order('created_at',{ascending:false}).limit(100),'Could not load the queue');
-export const unverifiedItems=async()=>rows((await client()).from('items').select('id,name,category,game_id,icon_path,first_seen').eq('source','observed').eq('verified',false).order('first_seen',{ascending:false}).limit(50),'Could not load items');
+export const unverifiedItems=async()=>rows((await client()).from('items').select('id,name,category,game_id,icon_path,first_seen').or('verified.eq.false,release_status.eq.unverified').order('first_seen',{ascending:false}).limit(50),'Could not load items');
 // Automatic catalog updates (supabase/migrations/*_catalog_autosync.sql): recent runs, and a manual "update now".
 export const catalogSyncLog=async()=>rows((await client()).from('catalog_sync_log').select('requested_at,finished_at,status,items,message').order('id',{ascending:false}).limit(6),'Could not load catalog updates');
 export const catalogSyncNow=async()=>rows((await client()).rpc('catalog_sync_now'),'Could not start a catalog update');
