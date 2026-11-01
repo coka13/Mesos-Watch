@@ -1,4 +1,4 @@
-# MesosWatch
+# Mesos.Watch
 
 Static browser app. Serve `dist/` over HTTPS or localhost. No build step.
 
