@@ -1,3 +1,4 @@
+import {deliverDiscord} from './discord-delivery.mjs';
 import {sourcePoint,validRegion} from './capture-geometry.mjs';
 import {observeChat} from './chat.mjs?v=reader-4';
 import {discordBody} from './notifications.mjs?v=reader-5';
@@ -31,8 +32,7 @@ async function send(content,picture,filename='sold-items.png'){
  const url=validWebhook();
  const blob=picture?await new Promise((resolve,reject)=>picture.toBlob(b=>b?resolve(b):reject(Error('Screenshot failed.')),'image/png')):null;
  const payload=discordBody(content,blob,filename);
- const r=await fetch(url,{method:'POST',...payload,signal:AbortSignal.timeout(20000)});
- if(!r.ok)throw Error(r.status===429?'Discord rate limit reached. Wait before restarting.':`Discord returned ${r.status}. Check your webhook and channel permissions.`);
+ await deliverDiscord(url,payload);
 }
 $('test').onclick=async()=>{try{$('test').disabled=true;await send('Mesos-Watch test: your shop alerts will arrive here.');status('Test delivered to Discord. You’re connected.');$('discord-step').open=false;}catch(e){status(e.message,true);}finally{$('test').disabled=false;}};
 function stop(message='Watching stopped. Restart to establish a fresh baseline.') {watching=false;clearTimeout(timer);timer=null;$('badge').classList.remove('live');$('badge').replaceChildren(Object.assign(document.createElement('span'),{className:'dot'}),document.createTextNode(' Not watching'));controls();status(message);}

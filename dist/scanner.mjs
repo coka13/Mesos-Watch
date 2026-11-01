@@ -91,7 +91,7 @@ async function scanOnce(){
   st.settled=listings.every(l=>st.sent.has(world+'|'+listingKey(l)));
   st.shared+=saved.length;
   for(const row of saved){const l=fresh.find(x=>x.item.toLowerCase()===row.item_name.toLowerCase())||fresh.find(x=>row.item_name.toLowerCase().startsWith(x.item.replace(/(\.\.\.|…)$/,'').toLowerCase()));
-   st.feed.unshift({time:new Date(),item:row.item_name,itemId:row.item_id,price:l?.price,qty:l?.qty,stats:l?.stats,shop:shop.shopTitle,map:shop.map});
+   st.feed.unshift({observationId:row.id,time:new Date(),item:row.item_name,itemId:row.item_id,price:l?.price,qty:l?.qty,stats:l?.stats,shop:shop.shopTitle,map:shop.map});
    if(l&&!row.catalog&&!st.icons.has(row.item_id)){st.icons.add(row.item_id);sendIcon(video,l.icon,row.item_id);}}
   st.feed=st.feed.slice(0,40);renderFeed();
   status(`Shared ${saved.length} new price${saved.length===1?'':'s'} from ${where}${shop.map?' · '+shop.map:''}. ${fresh.length-saved.length?`${fresh.length-saved.length} were already in the database.`:''}`,'ok');
@@ -126,7 +126,7 @@ function drawOverlay(video,listings,fresh){
 function renderFeed(){
  const list=$('scan-feed');list.replaceChildren();
  $('scan-feed-empty').hidden=st.feed.length>0;
- for(const f of st.feed){const li=document.createElement('li');
+ for(const f of st.feed){const li=document.createElement('li');li.title='Observation #'+f.observationId;const report=document.createElement('a');report.href='#reports';report.textContent='Report #'+f.observationId;li.append(report);
   const a=Object.assign(document.createElement('a'),{href:'#item/'+f.itemId,textContent:f.item});
   li.append(a,Object.assign(document.createElement('b'),{textContent:f.price!=null?fmt(f.price)+' mesos':''}),Object.assign(document.createElement('small'),{textContent:[f.qty>1?'×'+f.qty:'',Object.entries(f.stats||{}).map(([k,v])=>k+' '+v).join(' '),f.shop,f.map,f.time.toLocaleTimeString()].filter(Boolean).join(' · ')}));
   list.append(li);}

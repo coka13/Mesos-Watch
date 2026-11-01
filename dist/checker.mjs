@@ -105,6 +105,7 @@ async function loadItem(id){
   const origin=item.source==='catalog'?'Item ID '+item.game_id:item.category==='cash'?(item.verified?'NX item (confirmed by an admin)':'NX item'):item.verified?'Community item (confirmed by an admin)':'Community item: not in the MapleStory Classic catalog, often an NX item';
   $('ip-meta').textContent=[item.subcategory||'',CATEGORY_LABEL[item.category]||'',origin,item.base_stats?.reqLevel?'Lv. '+item.base_stats.reqLevel:'',item.base_stats?.jobs?.join('/')].filter(Boolean).join(' · ');
   $('ip-links').replaceChildren(...[item.game_id&&el('a',{href:'https://osmsdataexplorer.com',target:'_blank',rel:'noopener',textContent:'Item data: OSMS Data Explorer ↗'}),el('a',{href:'#history/'+item.id,textContent:'Full history →'})].filter(Boolean));
+  window.dispatchEvent(new CustomEvent('mesoswatch:item',{detail:item}));
   document.title=item.name+' price · Mesos-Watch';
   await Promise.all([loadSummary(),loadChart(),loadVariations(),loadBase(item)]);
  }catch(e){$('ip-name').textContent=e.message;}

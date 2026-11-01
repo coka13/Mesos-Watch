@@ -41,4 +41,16 @@ assert.equal((await db.query(`select count(*)::int n from public_player_listings
 await db.exec(`alter table player_listings enable trigger player_listing_guard`);
 assert.ok(!(await db.query(`select * from public_player_stores limit 1`)).rows[0].owner,'public views omit owner identity');
 console.log('Player stores: owner permissions, foreign-owner writes, public fields and expiry passed.');
+const watch=(await as(A,`insert into watchlist(item_id,world,threshold)values($1,'Scania',120)returning id`,[id]))[0];
+const ask=(await as(B,`insert into observations(kind,item_name,price,world,shop_key)values('ask','Preserved Potion',100,'Scania','shop-b')returning id`))[0];
+await as(A,`select evaluate_price_alerts()`);await as(A,`select evaluate_price_alerts()`);
+assert.equal((await as(A,`select count(*)::int n from price_alert_events`))[0].n,1,'repeated checks do not spam');
+assert.equal((await as(B,`select * from price_alert_events`)).length,0,'other accounts cannot read alerts');
+assert.equal((await as(B,`update watchlist set threshold=1 where id=$1 returning id`,[watch.id])).length,0);
+const report=(await as(A,`insert into market_reports(observation_id,reason)values($1,'Incorrect captured amount in this listing')returning id`,[ask.id]))[0];
+await assert.rejects(as(A,`insert into market_reports(observation_id,reason)values($1,'Duplicate report for the same observation')`,[ask.id]),/Already reported/);
+await assert.rejects(as(B,`select review_market_report($1,'actioned','Trying to review someone else')`,[report.id]),/admins only/);
+await as(C,`select review_market_report($1,'dismissed','Compared with original supporting information')`,[report.id]);
+assert.equal((await as(A,`select status from market_reports where id=$1`,[report.id]))[0].status,'dismissed');
+console.log('Community: private watchlists, alert deduplication, report rate/duplicate guards and admin review passed.');
 await db.close();
