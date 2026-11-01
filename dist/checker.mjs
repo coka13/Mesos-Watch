@@ -30,7 +30,7 @@ function artTile(item,box){
 }
 export function iconEl(item,size=32){
  const box=el('span',{className:'item-icon',style:`--s:${size}px`});
- const fallback=()=>{artTile(item,box);box.title='Picture drawn from the item name: no scan of this item yet';};
+ const fallback=()=>{artTile(item,box);box.title='Generic category placeholder; the correct item icon is not available';};
  const src=iconUrl(item);
  if(src){const img=el('img',{src,alt:'',loading:'lazy',decoding:'async',width:size,height:size});img.onerror=()=>{img.remove();fallback();};box.append(img);}else fallback();
  return box;
@@ -39,7 +39,9 @@ const itemLink=(item,text)=>el('a',{href:'#item/'+item.id,className:'item-link'}
 
 // Meso coin, beside every amount of mesos so a price never reads as a plain count. The sprite is the in-game mesos coin.
 export function mesoEl(size=14){return el('span',{className:'meso',style:`--m:${size}px`,title:'mesos'},el('img',{src:'meso.png?v=ms-1',alt:'',width:size,height:size,decoding:'async'}));}
-export const mesoAmt=(text,size=14)=>el('span',{className:'meso-amt'},mesoEl(size),document.createTextNode(String(text)));
+export const mesoAmt=(text,size=14)=>{const raw=String(text),numeric=/^[+-]?[\d,]+$/.test(raw)?Number(raw.replaceAll(',','')):null;return el('span',{className:'meso-amt',title:numeric===null?raw:numeric.toLocaleString('en-US')+' mesos'},mesoEl(size),document.createTextNode(numeric===null?raw:shortMesos(numeric)));};
+export const MesoPrice=(value,size=14)=>mesoAmt(Number(value).toLocaleString('en-US'),size);
+export const ItemDisplay=(item,size=28)=>el('span',{className:'item-link',title:[item.name,statText(item.base_stats?.stats),item.release_status].filter(Boolean).join(' · ')},iconEl(item,size),el('span',{textContent:item.name}));
 
 // ---- Search with autocomplete (used on the home page and in Price History) ----
 // Results arrive in pages; the next page loads when the list is scrolled (or arrowed) near its end, so every match is reachable.
@@ -88,11 +90,11 @@ async function loadHome(){
  if(!configured()){$('home-feed').replaceChildren(el('li',{className:'empty',textContent:'The community price database is not connected yet. Prices appear here once the site owner connects it and players start scanning.'}));$('home-top').replaceChildren(el('li',{className:'empty',textContent:'Nothing to show until the database is connected.'}));return;}
  try{
   const [recent,top]=await Promise.all([recentObservations(world(),20),marketTrends(world(),12)]);
-  $('home-feed').replaceChildren(...(recent.length?recent.map(feedRow):[el('li',{className:'empty',textContent:'No prices yet for this world. Be the first: open Live FM Scanner and share your game window.'})]));
+  $('home-feed').replaceChildren(...(recent.length?recent.map(feedRow):[el('li',{className:'empty',textContent:'No market data available yet'})]));
   $('home-top').replaceChildren(...(top.length?top.map(t=>el('li',{},itemLink(t),el('b',{},mesoAmt(shortMesos(+t.median_now))),el('small',{textContent:`${fmt(t.asks_7d)} seen · ${ago(t.last_seen)}`}))):[el('li',{className:'empty',textContent:'Nothing scanned this week yet.'})]));
  }catch(e){$('home-feed').replaceChildren(el('li',{className:'empty error',textContent:e.message}));$('home-top').replaceChildren(el('li',{className:'empty',textContent:'Unavailable right now.'}));}
 }
-const feedRow=o=>el('li',{className:o.kind==='sale'?'sale':''},itemLink(o.item,o.item_name),el('b',{},mesoAmt(fmt(o.price))),el('small',{textContent:[o.kind==='sale'?'sold':'asking',o.qty>1?'×'+o.qty:'',o.shop_title,o.map,ago(o.seen_at)].filter(Boolean).join(' · ')}));
+const feedRow=o=>el('li',{className:o.kind==='sale'?'sale':''},itemLink(o.item,o.item_name),el('b',{},mesoAmt(fmt(o.price))),el('small',{textContent:[o.kind==='sale'?'reviewed sale':'observed asking',o.qty>1?'×'+o.qty:'',o.shop_title,o.map,ago(o.seen_at)].filter(Boolean).join(' · ')}));
 
 // ---- Item page ----
 async function loadItem(id){
@@ -102,8 +104,8 @@ async function loadItem(id){
   const item=await getItem(id);if(!item){$('ip-name').textContent='Item not found';return;}
   currentItem=item;$('q').value=item.name;
   $('ip-icon').replaceChildren(iconEl(item,48));$('ip-name').textContent=item.name;
-  const origin=item.source==='catalog'?'Item ID '+item.game_id:item.category==='cash'?(item.verified?'NX item (confirmed by an admin)':'NX item'):item.verified?'Community item (confirmed by an admin)':'Community item: not in the MapleStory Classic catalog, often an NX item';
-  $('ip-meta').textContent=[item.subcategory||'',CATEGORY_LABEL[item.category]||'',origin,item.base_stats?.reqLevel?'Lv. '+item.base_stats.reqLevel:'',item.base_stats?.jobs?.join('/')].filter(Boolean).join(' · ');
+  const origin=item.source==='catalog'?'Item ID '+item.game_id:item.category==='cash'?(item.verified?'NX item (confirmed by an admin)':'NX item'):item.verified?'Community item (reviewed by an admin)':'Community item: not in the MapleStory Classic catalog, often an NX item';
+  $('ip-meta').textContent=[item.release_status?'Release: '+item.release_status:'Release status unverified',item.last_verified_at?'Verified '+ago(item.last_verified_at):'',item.subcategory||'',CATEGORY_LABEL[item.category]||'',origin,item.base_stats?.reqLevel?'Lv. '+item.base_stats.reqLevel:'',item.base_stats?.jobs?.join('/')].filter(Boolean).join(' · ');
   $('ip-links').replaceChildren(...[item.game_id&&el('a',{href:'https://osmsdataexplorer.com',target:'_blank',rel:'noopener',textContent:'Item data: OSMS Data Explorer ↗'}),el('a',{href:'#history/'+item.id,textContent:'Full history →'})].filter(Boolean));
   window.dispatchEvent(new CustomEvent('mesoswatch:item',{detail:item}));
   document.title=item.name+' price · Mesos-Watch';

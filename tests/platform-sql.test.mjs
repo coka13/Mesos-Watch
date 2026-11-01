@@ -63,4 +63,13 @@ await assert.rejects(as(A,`select post_test_megaphone('code','Cannot bypass chec
 await db.query(`update megaphones set starts_at=now()-interval '2 hours',ends_at=now()-interval '1 hour'where id=$1`,[campaign.id]);
 assert.equal((await db.query(`select * from live_megaphones where id=$1`,[campaign.id])).rows.length,0,'expired ads invisible');
 console.log('Megaphones: configured packages, payment prerequisites, duplicate approval, disabled bypass and expiration passed.');
+await as(C,`select review_observation($1,'rejected','Confirmed incorrect amount after reviewing evidence')`,[ask.id]);
+assert.equal((await db.query(`select item_summary($1,'Scania')s`,[id])).rows[0].s.lowest_ask_24h,null,'rejected asks excluded from summaries');
+assert.equal((await db.query(`select * from current_listings($1,'Scania')`,[id])).rows.length,0,'rejected asks excluded from listings');
+const cash=(await as(A,`insert into cash_item_candidates(name,nx_price,category,source_note)values('Reviewed NX Hat',3500,'Hat','Selected card on the Classic Cash Shop page')returning id`))[0];
+await assert.rejects(as(A,`update cash_item_candidates set status='accepted'where id=$1`,[cash.id]),/permission denied/);
+await assert.rejects(as(A,`select review_cash_candidate($1,'accepted',1004000,'https://example.test/release','Checked an explicit Classic release')`,[cash.id]),/admins only/);
+await as(C,`select review_cash_candidate($1,'accepted',1004000,'https://example.test/release','Checked an explicit Classic release')`,[cash.id]);
+const nx=(await db.query(`select * from visible_items where game_id=1004000`)).rows[0];assert.equal(nx.category,'cash');assert.equal(nx.base_stats.currency,'NX');assert.equal(nx.base_stats.nx_price,3500);
+console.log('Evidence visibility and Cash Shop review: rejected observations withheld, owner restrictions and NX currency separation passed.');
 await db.close();

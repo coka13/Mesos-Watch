@@ -27,4 +27,3 @@ begin
 end $$;
 revoke all on function public.approve_megaphone(uuid, integer) from public;
 grant execute on function public.approve_megaphone(uuid, integer) to authenticated, service_role;
-

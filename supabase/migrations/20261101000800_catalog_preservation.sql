@@ -81,4 +81,3 @@ begin
   return v_rows;
 end $$;
 revoke all on function public.catalog_apply(jsonb, jsonb) from public, anon, authenticated;
-

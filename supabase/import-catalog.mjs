@@ -48,7 +48,7 @@ export function toRows(list,cash=[]){
 }
 
 const lit=v=>v==null?'null':"'"+String(v).replace(/'/g,"''")+"'";
-// Upsert by name; v83 catalog rows from an older import that are not in Classic are removed unless prices reference them.
+// Legacy insert-only SQL export: conflicting identities and existing catalog rows remain unchanged.
 export function toSql(rows){
  const values=rows.map(r=>`(${r.game_id},${lit(r.name)},${lit(r.category)},${lit(r.subcategory)},${lit(JSON.stringify(r.base_stats))}::jsonb,'catalog',${lit(r.source_url)},false)`);
  return `begin;

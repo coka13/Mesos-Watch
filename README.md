@@ -1,47 +1,31 @@
-# Mesos-Watch
+# Mesos-Watch — local platform continuation
 
-A community price checker for the MapleStory Classic Free Market. Players share their game window in the browser and walk the FM as usual. Every shop they open is read on their own computer, and its prices are added to a shared database that anyone can search.
+The existing static HTML/CSS/JavaScript application is preserved. This checkout extends it with reviewed market evidence, player stores, a trading calculator, watchlists, in-app alerts, market reports, Cash Shop candidate review, and payment reliability improvements.
 
-The site is the static `dist/` folder: no build step, served over HTTPS or localhost. Shared data lives in Supabase (`supabase/`). Setup steps are in [SETUP.md](SETUP.md).
+**Local implementation only. Nothing in this checkout has been deployed or applied to production.** The production backup, invalid-listing selection, original screenshot acceptance, complete verified Classic/NX catalog and external service acceptance are still blocked. See LOCAL-RELEASE.md and SETUP.md before applying any changes.
 
-## Sections
+## Run locally
 
-- **Price Checker** (home): item search with autocomplete and pictures, and a live feed of fresh prices. Each item page shows:
-  - lowest asking price (24 h) and typical asking price (7-day median, compared with last week);
-  - estimated value, given only when there are at least 3 confirmed sales from 2 sellers in 30 days, never guessed;
-  - when the item was last seen, a 24h/7d/30d/90d history chart, and current listings with shop, FM room and stats;
-  - base stats, and price variations for scrolled or upgraded copies.
-- **Market Trends**: biggest risers and fallers week on week, and the most-listed items.
-- **Live FM Scanner**: share the game window and roam freely. Any shop window on screen is read automatically.
-- **Price History**: the full history of one item, as a chart and a table.
-- **FM Megaphones**: paid messages shown under the search bar (Stripe checkout, admin review, fair rotation, queued slots).
-- **My Store**: watches your own store's Sold Items window, keeps a sales history in this browser, and can contribute confirmed sales.
-- **Discord**: optional webhook notifications for My Store sales, one message per new Total Sales value.
-- **Settings**: local data, and admin moderation of megaphones and unverified items.
+- `npm ci` installs the locked development dependencies.
+- `npm test` runs legacy OCR/SQL regressions and current-platform integration tests.
+- `npm run verify` checks syntax, referenced assets, duplicate HTML IDs and common secret patterns.
+- `npm run preview` serves localhost port 8187. This preview intentionally overrides config.js with an empty configuration so it cannot connect to production data or payments. A PORT environment variable can select another port.
 
-## How screen reading works
+The deployed assets would be `dist/`. No build step is required. Supabase supplies PostgreSQL, auth, Storage, Realtime and Deno payment functions. Do not replace the external database with a new service merely to preview the UI.
 
-Everything uses browser screen sharing and Tesseract.js 6.0.1, loaded on demand from jsDelivr. Nothing clicks, types or reads game memory.
+## Data distinctions
 
-- **Auto Select (My Store)** finds the screen regions from word positions in one full-frame OCR pass, scaled 2–3×:
-  - Total Sales: the upper number when Total Sales and Total Received are stacked;
-  - the Sold Items list, from its Buyer / Number purchased rows;
-  - your mesos balance, a number beside a gold coin.
+- Scanner observations are asking prices, never guaranteed available inventory.
+- My Store OCR agreement is corroboration only. Submitted sale reports remain unverified until an admin reviews supporting evidence. Only reviewed sales enter sale valuation/history.
+- Public player listings are user-published and expire after 24 hours unless updated. Observation-assisted entries are explicitly labelled; assistance does not verify seller ownership or inventory.
+- Catalog imports preserve existing identities and records. New candidates require Classic release review with a source and timestamp. Legacy verified flags alone do not prove release availability.
+- NX prices in captured candidates are a separate currency from mesos observations.
+- Price alerts are in-app, checked while the Alerts page is open; no unattended notification service is configured.
 
-  It runs again by itself when the store area changes a lot or the total can't be read twice in a row. Manual selection remains as a fallback.
-- **Shop scanning** pairs each item-name row with the price row below it ("1 for 24,679 mesos"), and reads the shop title, the FM room and any hovered item's tooltip stats. At full-frame scale the small "1 for" often comes out garbled, so those lines are cropped, enlarged 4× and read twice (contrast and threshold). A listing counts only when both reads agree and two scans in a row match.
-- **Item matching**: names are matched to the catalog exactly, by a unique prefix when the game cuts a name off with "…", or by a close fuzzy match that starts the same way and is about as long. Anything else becomes a community item instead of being forced onto the wrong one.
+## Capture and integrations
 
-`tests/fixtures/` holds real Tesseract output from a 756×460 store screenshot. `npm test` checks that Auto Select and the shop reader handle it, together with synthetic layouts and the database tests.
+Browser screen sharing always uses a user-initiated picker. Auto Select processes a shared frame locally to find regions; ongoing My Store OCR reads selected sold-item/total information, balance and optional chat. Full-frame region localization is not a guarantee that unrelated pixels are never locally processed. Chat selection is still a manual fallback. Original screenshot/live acceptance remains necessary.
 
-## Data honesty
+Guided Cash Shop capture reads one manually selected card at a time and displays raw OCR locally for correction. Only reviewed structured fields are submitted; neither full frames nor raw OCR are uploaded. Candidate acceptance requires an admin, a verified game ID and a release-source URL. Missing icons need permitted assets; no fake item-specific icon is claimed.
 
-- Asking prices and confirmed sales are separate everywhere.
-- One player counts once per item, shop and price in a median.
-- Duplicates within 6 hours are ignored, and each player is rate-limited.
-- Every figure shows when it was last seen.
-- Item data is MapleStory Classic World game data from OSMS Data Explorer (CC BY 4.0, © NEXON), credited on every item page.
-
-## Owner configuration
-
-`dist/config.js` holds the Supabase URL and public anon key, optional worlds, the donation link and the sponsor. Never put the Supabase service role key, Stripe keys or Discord webhooks in it. Stripe and service keys live in Supabase secrets, and webhooks are entered by each visitor.
+Discord webhooks stay in page memory. Explicit 429 rejections can retry; uncertain sends never automatically retry. Payment code stays in sandbox by default, verifies webhook signatures and payment amounts, surfaces database failures, and prevents duplicate activation. No actual message or checkout was created in this run.

@@ -14,7 +14,7 @@ function route(){
  const view=VIEWS.includes(head)?head:LEGACY[head]||'checker',param=head==='item'?arg:view==='history'?arg:null;
  for(const v of document.querySelectorAll('.view'))v.hidden=v.dataset.view!==view;
  for(const a of document.querySelectorAll('#nav a'))a.toggleAttribute('aria-current',a.dataset.view===view);
- document.body.dataset.view=view;window.dispatchEvent(new CustomEvent('mesoswatch:view',{detail:{view,param:arg}}));
+ document.body.dataset.view=view;$('community-status').textContent='';window.dispatchEvent(new CustomEvent('mesoswatch:view',{detail:{view,param:arg}}));
  if(view!=='checker')document.title=document.querySelector(`#nav a[data-view="${view}"]`)?.textContent.trim()+' · Mesos-Watch';
  show(view,param).catch(()=>{});
  if(view==='megaphones')loadMegaphoneView(new URLSearchParams(query));
@@ -25,7 +25,7 @@ window.addEventListener('hashchange',route);
 
 // ---- World ----
 const ws=worlds(),sel=$('world');
-sel.replaceChildren(...(ws.length?ws.map(w=>new Option(w,w)):[new Option('All worlds','')]));
+sel.replaceChildren(...(ws.length?ws.map(w=>new Option(w,w)):[new Option('Unspecified world','')]));
 try{const saved=localStorage.getItem('mw-world');if(ws.includes(saved))sel.value=saved;}catch{}
 sel.hidden=!ws.length;
 sel.onchange=()=>{try{localStorage.setItem('mw-world',sel.value);}catch{}worldChanged();route();loadStrip();};
@@ -39,7 +39,7 @@ async function loadStrip(){
  if(strip.length>1)stripTimer=setInterval(showStrip,8000);
 }
 function showStrip(){
- if(!strip.length)return;const m=strip[stripIdx++%strip.length];
+ strip=strip.filter(m=>new Date(m.ends_at)>new Date());$('mega-strip').hidden=!strip.length;if(!strip.length)return;const m=strip[stripIdx++%strip.length];
  $('mega-text').replaceChildren(...[m.sender&&el('b',{textContent:m.sender+' : '}),document.createTextNode(m.message)].filter(Boolean));
  $('mega-pos').textContent=strip.length>1?`${(stripIdx-1)%strip.length+1}/${strip.length}`:'';
 }
@@ -48,7 +48,7 @@ setInterval(loadStrip,60000);
 // ---- FM Megaphones view ----
 let plans=[],chosen=null;
 async function loadMegaphoneView(q){
- if(q.get('paid'))note('Payment received. Your megaphone is in the review queue and its time starts when it is approved and a slot is free.','ok');
+ if(q.get('paid'))note('Checkout returned. Payment status is confirmed by the server; check your campaign status below.','ok');
  else if(q.get('cancelled'))note('Checkout cancelled. You were not charged.','');
  if(!configured()){$('mg-buy').disabled=true;note('Megaphones are not available yet: the site owner has not connected the database and payments.','warn');$('mg-live').replaceChildren(el('li',{className:'empty',textContent:'Unavailable until the site is connected.'}));$('mg-mine').replaceChildren(el('li',{className:'empty',textContent:'Unavailable until the site is connected.'}));renderPlans(FALLBACK_PLANS);return;}
  try{plans=await megaphonePlans();renderPlans(plans);}catch(e){note(e.message,'error');$('mg-buy').disabled=true;}
@@ -95,7 +95,7 @@ async function loadSettings(){
 const SYNC_LABEL={requested:'Downloading…',applied:'Updated',unchanged:'No changes',failed:'Failed'};
 async function loadSync(){
  try{const log=await catalogSyncLog();
-  $('adm-sync-log').replaceChildren(...(log.length?log.map(r=>el('li',{},el('span',{className:'msg',textContent:`${SYNC_LABEL[r.status]||r.status}${r.items!=null?` · ${r.items} items`:''}`}),el('small',{textContent:`${new Date(r.requested_at).toLocaleString()}${r.message?' · '+r.message:''}`}))):[el('li',{className:'empty',textContent:'No automatic update has run yet. The first one runs at the next 06:17 UTC, or press Update now.'})]));
+  $('adm-sync-log').replaceChildren(...(log.length?log.map(r=>el('li',{},el('span',{className:'msg',textContent:`${SYNC_LABEL[r.status]||r.status}${r.items!=null?` · ${r.items} items`:''}`}),el('small',{textContent:`${new Date(r.requested_at).toLocaleString()}${r.message?' · '+r.message:''}`}))):[el('li',{className:'empty',textContent:'No catalog update recorded. Source permission and operator configuration are required before synchronization.'})]));
  }catch(e){$('adm-sync-log').replaceChildren(el('li',{className:'empty error',textContent:e.message}));}
 }
 $('adm-sync').onclick=async()=>{const b=$('adm-sync');b.disabled=true;try{const id=await catalogSyncNow();b.textContent=id?'Downloading… applied within 5 minutes':'A download is already running';}catch(e){b.textContent=e.message;}loadSync();setTimeout(()=>{b.disabled=false;b.textContent='Update now';loadSync();},60000);};

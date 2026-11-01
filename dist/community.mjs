@@ -19,7 +19,7 @@ async function loadStores(){
 }
 async function openPublicStore(s){
  $('public-store-detail').hidden=false;$('public-store-title').textContent=s.name+' · '+s.character_name;$('public-store-description').textContent=s.description;
- const rows=await api.storeListings(s.id);$('public-store-items').replaceChildren(...(rows.length?rows.map(r=>el('li',{},link({id:r.item_id,name:r.item_name,...r}),mesoAmt(Number(r.price).toLocaleString()),el('span',{textContent:'×'+r.qty+' · '+statText(r.stats)}),el('small',{textContent:r.source+' · '+ago(r.updated_at)+' · expires '+new Date(r.expires_at).toLocaleString()}))):[el('li',{className:'empty',textContent:'No active listings. Published listings expire after 24 hours.'})]));
+ const rows=await api.storeListings(s.id);$('public-store-items').replaceChildren(...(rows.length?rows.map(r=>el('li',{},link({...r,id:r.item_id,name:r.item_name}),mesoAmt(Number(r.price).toLocaleString()),el('span',{textContent:'×'+r.qty+' · '+statText(r.stats)}),el('small',{textContent:r.source+' · '+ago(r.updated_at)+' · expires '+new Date(r.expires_at).toLocaleString()}))):[el('li',{className:'empty',textContent:'No active listings. Published listings expire after 24 hours.'})]));
 }
 async function editStore(){
  storeId=$('owned-store').value||null;const s=stores.find(x=>x.id===storeId);

@@ -4,8 +4,10 @@
   "type": "module",
   "description": "MapleStory Classic community FM price checker. The site is the static dist/ folder; supabase/ holds the database and payment functions.",
   "scripts": {
-    "test": "node check.mjs && node tests/store-session.test.mjs && node supabase/tests/sql.test.mjs",
-    "import-catalog": "node supabase/import-catalog.mjs"
+    "test": "node check.mjs && node tests/store-session.test.mjs && node tests/capture-geometry.test.mjs && node tests/trading.test.mjs && node tests/discord-delivery.test.mjs && node tests/payments.test.mjs && node supabase/tests/sql.test.mjs && node tests/platform-sql.test.mjs",
+    "import-catalog": "node supabase/import-catalog.mjs",
+    "preview": "node scripts/preview.mjs",
+    "verify": "node scripts/verify.mjs"
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.2.17",

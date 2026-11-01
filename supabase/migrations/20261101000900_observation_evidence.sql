@@ -62,4 +62,3 @@ begin
     from observations o where (o.kind='ask' or o.verification_status='verified') and o.item_id = p_item and o.world = p_world and o.seen_at > now() - v_since
     group by 1, 2 order by 1, 2;
 end $$;
-
