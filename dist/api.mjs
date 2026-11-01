@@ -41,9 +41,9 @@ export async function searchItems(q,world='',lim=50,offset=0){
  return offset>0?[]:rows(sb.rpc('search_items',{q,p_world:world,lim:Math.min(lim,25)}),'Search failed');
 }
 export const getItem=async id=>rows((await client()).from('items').select('*').eq('id',id).maybeSingle(),'Could not load the item');
-export const itemSummary=async(id,world='')=>rows((await client()).rpc('item_summary',{p_item:id,p_world:world}),'Could not load prices');
+export const itemSummary=async(id,world='')=>{const s=await rows((await client()).rpc('item_summary',{p_item:id,p_world:world}),'Could not load prices');return s.verified_sales_only?s:{...s,estimated_value:null,median_sale_30d:null,sales_30d:0,sale_reporters_30d:0};};
 export const currentListings=async(id,world='')=>rows((await client()).rpc('current_listings',{p_item:id,p_world:world,lim:100}),'Could not load listings');
-export const priceHistory=async(id,world='',range='7d')=>rows((await client()).rpc('price_history',{p_item:id,p_world:world,p_range:range}),'Could not load history');
+export const priceHistory=async(id,world='',range='7d')=>{const s=await rows((await client()).rpc('item_summary',{p_item:id,p_world:world}),'Could not check evidence version');const h=await rows((await client()).rpc('price_history',{p_item:id,p_world:world,p_range:range}),'Could not load history');return s.verified_sales_only?h:h.filter(r=>r.kind==='ask');};
 export const itemVariations=async(id,world='')=>rows((await client()).rpc('item_variations',{p_item:id,p_world:world}),'Could not load variations');
 export async function marketTrends(world='',lim=60){
  const sb=await client();
@@ -82,14 +82,14 @@ export async function reportObservations(observations,{world=''}={}){
  for(const o of clean){
   const m=matched.get(o.item),truncated=/(\.\.\.|…)$/.test(o.item);
   if(!m?.name&&truncated)continue;
-  out.push({kind:o.kind==='sale'?'sale':'ask',world,item_name:(m?.name||o.item).slice(0,60),price:o.price,qty:o.qty,stats:o.stats||{},shop_key:String(o.shopKey||'').slice(0,64),shop_title:String(o.shopTitle||'').slice(0,40),map:String(o.map||'').slice(0,40),channel:o.channel>=1&&o.channel<=40?o.channel:null});
+  out.push({kind:o.kind==='sale'?'sale':'ask',world,confidence:Number.isFinite(o.confidence)?Math.max(0,Math.min(100,o.confidence)):null,capture_source:o.kind==='sale'?'store':'scanner',item_name:(m?.name||o.item).slice(0,60),price:o.price,qty:o.qty,stats:o.stats||{},shop_key:String(o.shopKey||'').slice(0,64),shop_title:String(o.shopTitle||'').slice(0,40),map:String(o.map||'').slice(0,40),channel:o.channel>=1&&o.channel<=40?o.channel:null});
  }
  if(!out.length)return 0;
  const {data,error}=await sb.from('observations').insert(out).select('id,item_id,item_name');
  if(error)throw Error(/rate limit/i.test(error.message)?'Too many reports from this browser. Scanning resumes in a few minutes.':'Could not save prices: '+error.message);
  // Rows the server skipped as duplicates are not returned. catalog: the name matched a catalog item (which has its own icon).
  const catalog=new Set([...matched.values()].filter(m=>m.name&&m.game_id).map(m=>m.name));
- return data.map(d=>({...d,catalog:catalog.has(d.item_name)}));
+ return (data||[]).map(d=>({...d,catalog:catalog.has(d.item_name)}));
 }
 
 // Community icon: an exact-size PNG of the sprite next to a listing. Becomes the item's icon once two players agree.

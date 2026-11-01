@@ -86,7 +86,7 @@ async function scanOnce(){
   const where=shop.shopTitle?`“${shop.shopTitle}”`:'a shop';
   if(!fresh.length){status(`Reading ${where}: ${listings.length} listing${listings.length===1?'':'s'}. ${st.sent.size?'Already shared; scroll the list or move on to the next shop.':'Confirming with a second read…'}`);return;}
   if(!configured()){status(`Read ${listings.length} listings in ${where}, but the community database is not connected yet, so nothing was shared.`,'warn');return;}
-  const saved=await reportObservations(fresh.map(l=>({kind:'ask',item:l.item,price:l.price,qty:l.qty,stats:l.stats,shopKey,shopTitle:shop.shopTitle,map:shop.map,channel:shop.channel})),{world});
+  const saved=await reportObservations(fresh.map(l=>({kind:'ask',item:l.item,price:l.price,qty:l.qty,confidence:Math.min(100,l.nameConf??65),stats:l.stats,shopKey,shopTitle:shop.shopTitle,map:shop.map,channel:shop.channel})),{world});
   for(const l of fresh)st.sent.add(world+'|'+listingKey(l));
   st.settled=listings.every(l=>st.sent.has(world+'|'+listingKey(l)));
   st.shared+=saved.length;

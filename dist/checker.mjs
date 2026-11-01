@@ -115,7 +115,7 @@ async function loadSummary(){
  const trend=s.median_ask_7d&&s.median_ask_prev_7d?Math.round(100*(s.median_ask_7d-s.median_ask_prev_7d)/s.median_ask_prev_7d):null;
  kpi('k-low',s.lowest_ask_24h,s.lowest_ask_24h?`${fmt(s.asks_24h)} listings seen in 24 h`:'No listings seen in the last 24 h');
  kpi('k-median',s.median_ask_7d,s.median_ask_7d?`${fmt(s.asks_7d)} sightings · ${fmt(s.reporters_7d)} player${s.reporters_7d==1?'':'s'}`+(trend!=null?` · ${trend>0?'▲':trend<0?'▼':'■'} ${Math.abs(trend)}% vs last week`:''):'No asking prices this week');
- kpi('k-value',s.estimated_value,s.estimated_value?`Median of ${fmt(s.sales_30d)} sales from ${fmt(s.sale_reporters_30d)} sellers (30 d)`:`Needs 3 sales from 2 sellers (have ${fmt(s.sales_30d)})`);
+ kpi('k-value',s.estimated_value,s.estimated_value?`Median of ${fmt(s.sales_30d)} sales from ${fmt(s.sale_reporters_30d)} sellers (30 d)`:`Needs 3 reviewed sales from 2 sellers (have ${fmt(s.sales_30d)})`);
  const f=freshness(s.last_seen);$('k-fresh').querySelector('strong').textContent=s.last_seen?ago(s.last_seen):'Never';$('k-fresh').querySelector('small').textContent=s.last_seen?new Date(s.last_seen).toLocaleString():'Not scanned yet in this world';$('k-fresh').dataset.fresh=f;
  const body=$('ip-listings');body.replaceChildren(...listings.map(l=>el('tr',{},el('td',{className:'num'},mesoAmt(fmt(l.price),13)),el('td',{className:'num',textContent:l.qty>1?'×'+l.qty:'1'}),el('td',{textContent:statText(l.stats)||'—',className:Object.keys(l.stats||{}).length?'stats':'muted'}),el('td',{textContent:[l.shop_title,l.map,l.channel?'Ch '+l.channel:''].filter(Boolean).join(' · ')||'—'}),el('td',{className:'when',textContent:ago(l.seen_at)}))));
  $('ip-listings-empty').hidden=listings.length>0;
