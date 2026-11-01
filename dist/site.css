@@ -188,3 +188,5 @@ body>main{flex:1 0 auto}
 body>header,body>main,body>footer{min-width:0}
 @media(min-width:1141px){header{margin-inline:max(0px,(100% - 1500px)/2)}}
 @media(min-width:1501px){main,footer{margin-inline:calc((100% - 1444px)/2)}}
+
+.community-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:16px 0}.community-form label{display:flex;flex-direction:column;gap:6px}.community-form label:has(input[type=checkbox]){flex-direction:row;align-items:center}.community-form input,.community-form textarea,.community-form select{min-width:0;width:100%;padding:9px;border:1px solid var(--cream-line);border-radius:6px;font:inherit}.community-form input[type=checkbox]{width:auto}.community-form textarea{min-height:80px}#capture-debug{white-space:pre-wrap;overflow-wrap:anywhere;max-height:300px;overflow:auto}.panel{min-width:0}#community-status:empty{display:none}

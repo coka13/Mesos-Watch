@@ -5,7 +5,7 @@ import {show,worldChanged,ago,iconEl} from './checker.mjs?v=ms-2';
 const $=id=>document.getElementById(id);
 const el=(tag,props={},...kids)=>{const e=Object.assign(document.createElement(tag),props);e.append(...kids.filter(k=>k!=null&&k!==false));return e;};
 const money=c=>'$'+(c/100).toFixed(2);
-const VIEWS=['checker','trends','scanner','history','megaphones','store','settings'];
+const VIEWS=['checker','trends','scanner','history','megaphones','store','settings','stores','opportunities','watchlist','alerts','reports'];
 const LEGACY={watcher:'store','sale-activity':'store',support:'store',discord:'store',guide:'settings',prices:'checker',item:'checker'};
 
 // ---- Router ----
@@ -14,7 +14,7 @@ function route(){
  const view=VIEWS.includes(head)?head:LEGACY[head]||'checker',param=head==='item'?arg:view==='history'?arg:null;
  for(const v of document.querySelectorAll('.view'))v.hidden=v.dataset.view!==view;
  for(const a of document.querySelectorAll('#nav a'))a.toggleAttribute('aria-current',a.dataset.view===view);
- document.body.dataset.view=view;
+ document.body.dataset.view=view;window.dispatchEvent(new CustomEvent('mesoswatch:view',{detail:{view,param:arg}}));
  if(view!=='checker')document.title=document.querySelector(`#nav a[data-view="${view}"]`)?.textContent.trim()+' · Mesos-Watch';
  show(view,param).catch(()=>{});
  if(view==='megaphones')loadMegaphoneView(new URLSearchParams(query));
