@@ -25,17 +25,24 @@ export function cleanItemText(text) {
     // identify those UI labels (or their values) as a newly sold item.
     if(/^(?:[|\[\]{}:;_~\\\s]*)(?:sold\s*items?|buyer|(?:number|murmber|numher)\s+(?:purchased|sold)|[\d,.\s]+mesos?\b)/i.test(line)) continue;
     line=line.split(/\bbuyer\s*[:;]|\b(?:number|murmber|numher)\s+(?:purchased|sold)\b/i)[0]
-      .replace(/^[^a-zA-Z0-9]+/,'').replace(/[|\[\]{}\\]+$/g,'').trim();
+      .replace(/^[^a-zA-Z0-9]+/,'').replace(/(\.{2,}|…).*$/,'$1').replace(/[=|\[\]{}\\\s]+$/g,'').trim();
+    if(/\bpurchased\b/i.test(line)) continue;
     if(/[a-zA-Z]{3}/.test(line)) kept.push(line);
   }
   return kept.join('\n');
 }
+export function chooseItemReading(first,second){
+  const a=cleanItemText(first.text),b=cleanItemText(second.text);
+  const reliable=!!a&&a===b&&Math.min(first.confidence,second.confidence)>=65;
+  const best=first.confidence>=second.confidence?a:b;
+  return{items:reliable?a:'',display:best,itemReliable:reliable,confidence:Math.min(first.confidence,second.confidence)};
+}
 export function observe(state,reading) {
   if(reading.total===null || reading.confidence<65) return {kind:'unreadable',state:{...state,candidate:null}};
-  if(state.total===null) return {kind:'baseline',state:{total:reading.total,items:reading.items,candidate:null}};
+  if(state.total===null) return {kind:'baseline',state:{total:reading.total,items:reading.items,itemReliable:reading.itemReliable!==false,candidate:null}};
   if(reading.total<state.total) return {kind:'reset',state:{...state,candidate:null}};
   if(reading.total===state.total) return {kind:'unchanged',state:{...state,candidate:null}};
-  const key=reading.total+'|'+normalizeLines(reading.items).join('|');
+  const key=String(reading.total);
   if(state.candidate!==key) return {kind:'pending',state:{...state,candidate:key}};
-  return {kind:'sale',amount:reading.total-state.total,names:itemNames(state.items,reading.items),state:{total:reading.total,items:reading.items,candidate:null}};
+  return {kind:'sale',amount:reading.total-state.total,names:reading.itemReliable!==false&&state.itemReliable!==false?itemNames(state.items,reading.items):[],state:{total:reading.total,items:reading.items,itemReliable:reading.itemReliable!==false,candidate:null}};
 }
