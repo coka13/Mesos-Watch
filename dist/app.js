@@ -3,7 +3,7 @@ import {discordBody} from './notifications.mjs?v=reader-5';
 import {createSession,observeStore} from './store-session.mjs?v=phase3-1';
 import {parseTotal,chooseItemReading} from './detection.mjs?v=reader-4';
 import {tsvWords,locateRegions,frameScale,coinScorer} from './locate.mjs?v=autoselect-3';
-import {reportObservations,configured as boardConfigured} from './api.mjs?v=pc-4';
+import {reportObservations,configured as boardConfigured} from './api.mjs?v=ms-2';
 const $=id=>document.getElementById(id);
 const video=$('video'),preview=$('preview'),ctx=preview.getContext('2d');
 let stream=null,regions={},mode=null,drag=null,timer=null,watching=false,busy=false,worker=null,workerPromise=null,state=createSession(crypto.randomUUID()),sales=[],frame=null,checking=false;

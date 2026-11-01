@@ -140,7 +140,8 @@ input[type=checkbox]{accent-color:var(--wood)}
 .metric{background:var(--cream-2);border:1px solid var(--cream-line);border-radius:var(--radius-sm);box-shadow:var(--bevel)}
 .metric small{font:700 11px var(--text);color:var(--muted)}
 .session-title{font:700 1.05rem var(--display);color:var(--wood-dark)}
-.meso-icon,.empty-coin{background:linear-gradient(#fff6a6,#e5b144);border:2px solid #c08e29;color:#bc8b28;box-shadow:inset 0 0 0 2px #fff5b7,0 2px 0 rgba(90,54,22,.35)}
+.meso-icon,.empty-coin{display:inline-grid;place-items:center;background:none;border:0;color:inherit;box-shadow:none;overflow:visible}
+.meso-icon img,.empty-coin img{width:100%;height:100%;display:block;filter:drop-shadow(0 2px 0 rgba(61,36,16,.3))}
 .session-foot{font:700 11px var(--display);letter-spacing:.3px;color:var(--muted)}
 .session-foot .dot{background:var(--grass)}
 
