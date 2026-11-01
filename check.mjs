@@ -1,9 +1,17 @@
 import assert from 'node:assert/strict';
-import {parseTotal,observe,itemNames} from './dist/detection.mjs';
+import {parseTotal,observe,itemNames,cleanItemText} from './dist/detection.mjs';
 assert.equal(parseTotal('1,250,000\n'),1250000);
 assert.equal(parseTotal('1.250.000'),1250000);
 assert.equal(parseTotal('Total 123'),null);
 assert.equal(parseTotal(''),null);
+assert.equal(parseTotal('13,679\n13,269'),null);
+assert.equal(parseTotal('13679 13269'),null);
+assert.equal(parseTotal('13,679'),13679);
+const mixed='| Overall Armor INT Scroll: Gr...\nBuyer: Imhanmeimei\nMurmber purchased: 1\nTotal Sales / Total Received\n13,679 mesos 13,269 mesos';
+assert.equal(cleanItemText(mixed),'Overall Armor INT Scroll: Gr...');
+assert.deepEqual(itemNames('',mixed),['Overall Armor INT Scroll: Gr...']);
+assert.equal(cleanItemText('Buyer: OtherPlayer\nNumber purchased: 1\nTotal Sales / Total Received\n13,679 mesos'),'');
+assert.equal(cleanItemText('Overall Armor INT Scroll Buyer: Player Number purchased: 1 Total Sales 13,679'),'Overall Armor INT Scroll');
 let s={total:null,items:'',candidate:null};
 let r=observe(s,{total:100,items:'Old Item 100',confidence:90});assert.equal(r.kind,'baseline');s=r.state;
 r=observe(s,{total:200,items:'Old Item 100\nNew Item 100',confidence:90});assert.equal(r.kind,'pending');s=r.state;
