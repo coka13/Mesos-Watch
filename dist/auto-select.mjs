@@ -1,6 +1,8 @@
 import {locateRegions,tsvWords} from './locate.mjs?v=autoselect-4';
 import {validRegion} from './capture-geometry.mjs';
 export const ESSENTIAL_REGIONS=['total','items','balance'];
+export const requiredStoreRegions=regions=>regions.mode==='sold-items'?['items','balance']:ESSENTIAL_REGIONS;
+export const storeRegionsReady=regions=>requiredStoreRegions(regions).every(key=>!!regions[key]);
 // All passes inspect one immutable frame. Never merge boxes from different frames or OCR interpretations.
 export async function detectStoreRegions({recognize,width,height,scale,sourceWidth,sourceHeight,coinScore,onProgress=()=>{},isCurrent=()=>true}){
  let best={regions:{},confidence:null,attempts:[],missing:[...ESSENTIAL_REGIONS]},bestScore=-1;
@@ -10,8 +12,8 @@ export async function detectStoreRegions({recognize,width,height,scale,sourceWid
   const {data}=await recognize(pass);
   if(!isCurrent())return{...best,cancelled:true};
   const words=tsvWords(data.tsv),regions=locateRegions(words,width,height,scale,coinScore);
-  for(const key of ['total','items','balance','sale'])if(regions[key]&&!validRegion(regions[key],sourceWidth,sourceHeight))delete regions[key];
-  const missing=ESSENTIAL_REGIONS.filter(key=>!regions[key]);
+  for(const key of ['total','items','balance','sale','chat'])if(regions[key]&&!validRegion(regions[key],sourceWidth,sourceHeight))delete regions[key];
+  const missing=requiredStoreRegions(regions).filter(key=>!regions[key]);
   const attempt={pass:pass.name,words:words.length,confidence:data.confidence??null,missing};
   best.attempts.push(attempt);
   const score=(3-missing.length)*10-(regions.totalEstimated?1:0)-(regions.itemsEstimated?1:0);

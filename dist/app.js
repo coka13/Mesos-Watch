@@ -1,4 +1,5 @@
-import {detectStoreRegions,enhanceFramePixels} from './auto-select.mjs?v=autoselect-4';
+import {numericInkBounds} from './numeric-region.mjs';
+import {detectStoreRegions,enhanceFramePixels,storeRegionsReady} from './auto-select.mjs?v=autoselect-4';
 import {deliverDiscord} from './discord-delivery.mjs';
 import {sourcePoint,validRegion} from './capture-geometry.mjs';
 import {observeChat} from './chat.mjs?v=reader-4';
@@ -24,8 +25,8 @@ function controls(){
  const connected=!!stream;
  $('save-item-crop').disabled=!connected||!regions.items||busy;
  for(const id of ['select-total','select-items','select-balance','select-chat','select-sale','auto-detect'])$(id).disabled=!connected||watching||checking||busy;
- $('read').disabled=!connected||!regions.total||!regions.items||busy||watching;
- $('start').disabled=!connected||!regions.total||!regions.items||!regions.balance||watching||busy||checking;
+ $('read').disabled=!connected||!storeRegionsReady(regions)||busy||watching;
+ $('start').disabled=!connected||!storeRegionsReady(regions)||watching||busy||checking;
  $('connect').disabled=watching||checking||busy;$('interval').disabled=watching;$('stop').disabled=!watching;
  $('chat-alerts').disabled=watching||busy;
 }
@@ -68,27 +69,26 @@ function prepare(image,threshold=false){const c=document.createElement('canvas')
 function showCrop(id,image){const canvas=$(id);canvas.hidden=false;canvas.width=image.width;canvas.height=image.height;canvas.getContext('2d').drawImage(image,0,0);}
 async function getWorker(){if(worker)return worker;if(!workerPromise){workerPromise=(async()=>{status('Loading the OCR engine for the first reading…');if(!window.Tesseract){await new Promise((resolve,reject)=>{const s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/tesseract.js@6.0.1/dist/tesseract.min.js';s.onload=resolve;s.onerror=()=>{s.remove();reject(Error('Could not load OCR. Check your connection and retry.'));};document.head.append(s);});}worker=await window.Tesseract.createWorker('eng',1,{logger:()=>{}});await worker.setParameters({tessedit_pageseg_mode:'6'});return worker;})();}try{return await workerPromise;}catch(e){workerPromise=null;throw e;}}
 async function reading(){
- const totalImage=crop('total',4),itemsImage=crop('items',4),picture=crop('items');
- showCrop('total-crop',crop('total',2));showCrop('items-crop',crop('items',2));
- const w=await getWorker();
- await w.setParameters({tessedit_pageseg_mode:'7',tessedit_char_whitelist:'0123456789, .'});
- const t=await w.recognize(prepare(totalImage)),t2=await w.recognize(prepare(totalImage,true));
- const a=parseTotal(t.data.text),b=parseTotal(t2.data.text),total=a!==null&&a===b?a:null;
+ const itemsImage=crop('items',4),picture=crop('items');
+ showCrop('items-crop',crop('items',2));
+ const w=await getWorker();let t={data:{text:'',confidence:0}},t2=t,a=null,b=null,total=null;
+ if(regions.total){const totalImage=crop('total',4);showCrop('total-crop',crop('total',2));await w.setParameters({tessedit_pageseg_mode:'7',tessedit_char_whitelist:'0123456789, .'});t=await w.recognize(prepare(totalImage));t2=await w.recognize(prepare(totalImage,true));a=parseTotal(t.data.text);b=parseTotal(t2.data.text);total=a!==null&&a===b?a:null;}
  await w.setParameters({tessedit_pageseg_mode:'6',tessedit_char_whitelist:''});
  const i=await w.recognize(prepare(itemsImage)),i2=await w.recognize(prepare(itemsImage,true));
  const chosen=chooseItemReading(i.data,i2.data);
  const balance=await readBalance(w);
- $('total-reading').textContent=total===null?'Reselect total':fmt(total)+' mesos';
+ $('total-reading').textContent=regions.mode==='sold-items'?'Not shown in this layout':total===null?'Reselect total':fmt(total)+' mesos';
  $('items-reading').textContent=chosen.display||'No item names found — select the names only';
  $('items-reading').classList.toggle('uncertain',!chosen.itemReliable);
  $('item-quality').textContent=chosen.itemReliable?'Both readings agree. Compare the spelling with the item crop.':'Uncertain item text — this spelling will not be sent as a sale item. Compare the crop or save it for troubleshooting.';
  $('item-quality').classList.toggle('uncertain',!chosen.itemReliable);
  $('raw-ocr').textContent='Total pass 1: '+t.data.text.trim()+'\nTotal pass 2: '+t2.data.text.trim()+'\n\nItem pass 1:\n'+i.data.text.trim()+'\n\nItem pass 2:\n'+i2.data.text.trim();
- $('ocr-quality').textContent='Total confidence: '+Math.round(Math.min(t.data.confidence,t2.data.confidence))+'% · Item text: '+Math.round(chosen.confidence)+'%'+(a!==b?' · Total readings disagree':'');
+ const confidence=regions.mode==='sold-items'?chosen.confidence:Math.min(t.data.confidence,t2.data.confidence);
+ $('ocr-quality').textContent=(regions.mode==='sold-items'?'No cumulative sales total · item confidence: '+Math.round(confidence)+'% · ':'Total confidence: '+Math.round(Math.min(t.data.confidence,t2.data.confidence))+'% · ')+ 'Item text: '+Math.round(chosen.confidence)+'%'+(a!==b?' · Total readings disagree':'');
  debugCapture({total,balance,confidence:Math.min(t.data.confidence,t2.data.confidence),selectedItemOCR:[i.data.text,i2.data.text]});
- return{total,balance,rawFirst:i.data.text,rawSecond:i2.data.text,raw:i.data.text+'\n'+i2.data.text,items:chosen.items,itemReliable:chosen.itemReliable,confidence:Math.min(t.data.confidence,t2.data.confidence),picture};
+ return{mode:regions.mode||'total',total,balance,rawFirst:i.data.text,rawSecond:i2.data.text,raw:i.data.text+'\n'+i2.data.text,items:chosen.items,itemReliable:chosen.itemReliable,confidence,picture};
 }
-$('read').onclick=async()=>{if(busy)return;busy=true;checking=true;controls();try{const r=await reading();status(r.total===null||r.confidence<65?'The total is unclear. Select a tighter area around the number, then check again.':'Reading complete. Compare the total and item text with your game before starting.',r.total===null||r.confidence<65);}catch(e){status(e.message,true);}finally{busy=false;checking=false;controls();}};
+$('read').onclick=async()=>{if(busy)return;busy=true;checking=true;controls();try{const r=await reading();const bad=r.balance===null||r.confidence<65||(r.mode!=='sold-items'&&r.total===null);status(bad?'A selected region is unreadable. Check the crops and retry.':r.mode==='sold-items'?'Sold Items and balance read. This layout has no sales total; changes will remain unverified.':'Reading complete. Compare the total and item text with your game before starting.',bad);}catch(e){status(e.message,true);}finally{busy=false;checking=false;controls();}};
 async function tick(){
  if(!watching)return;if(busy){timer=setTimeout(tick,1500);return;}if(redetect){redetect=false;await autoDetect(true);if(!watching)return;}busy=true;controls();
  try{
@@ -98,6 +98,9 @@ async function tick(){
   state=result.state;
   baselineNote.textContent=state.initialBalance===null?'Session starting mesos: not set':'Session starting mesos: '+fmt(state.initialBalance)+' · current change: '+(r.balance===null?'unreadable':fmt(r.balance-state.initialBalance))+' mesos';
   if(result.kind==='unreadable')status('Sales total unclear. No sale alert sent; checking again next time.',true);
+  else if(result.kind==='unverified'){
+   sales.unshift({time:new Date().toISOString(),sessionId:state.id,initialBalance:state.initialBalance,kind:'unverified',names:result.names.length?result.names.join(', '):'Sold Items changed',amount:null,balanceChange:result.balanceChange,corroborated:false,evidence:result.reason,delivery:'Unverified change · no sale notification or market contribution'});renderSales();status(result.reason);
+  }
   else if(result.kind==='sale'){
    const names=result.names.length?result.names.join(', '):'Item text unclear — see the Sold Items snapshot';
    const saleKey=state.id+':'+String(state.total);
@@ -112,7 +115,7 @@ async function tick(){
    }catch(e){entry.delivery='Delivery failed — not retried';stop('Sale snapshot delivery failed. Check your webhook, then restart. '+e.message);$('status').classList.add('error');}
    else status('Sale recorded. Connect Discord under Discord Integration to get notified.');
    renderSales();
-  }else status(result.kind==='pending'?'Sales total changed. Waiting for a second reading…':result.kind==='baseline'?'Baseline set. Watching for new sales and messages.':'Last checked '+new Date().toLocaleTimeString()+'. No new sale detected.');
+  }else status(result.kind==='pending'?(r.mode==='sold-items'?'Sold Items changed. Confirming a second reading…':'Sales total changed. Waiting for a second reading…'):result.kind==='baseline'?'Baseline set. Watching for new sales and messages.':'Last checked '+new Date().toLocaleTimeString()+'. No new sale detected.');
   if(watching&&$('chat-alerts').checked&&$('webhook').value.trim())await checkChat();
  }catch(e){stop('Monitoring paused: '+e.message);$('status').classList.add('error');}
  finally{busy=false;controls();if(watching)timer=setTimeout(tick,Number($('interval').value)*1000);}
@@ -133,11 +136,11 @@ async function checkChat(){
  }else $('chat-status').textContent=result.kind==='unreadable'?'Chat text is unclear. Keep the selected area visible.':result.kind==='pending'?'New chat text detected; confirming the reading…':result.kind==='reset'?'Chat history changed or scrolled. Baseline reset; keep chat at the bottom.':result.kind==='baseline'?'Chat baseline set. Existing messages will not trigger alerts.':'Watching shop chat · '+chatCount+' new message(s) sent.';
 }
 
-$('start').onclick=async()=>{try{if($('webhook').value.trim())validWebhook();if(!regions.total||!regions.items||!regions.balance)throw Error('Select Sold Items, Total Sales and personal mesos before starting.');if($('chat-alerts').checked&&$('webhook').value.trim()&&!regions.chat){selectRegion('chat');throw Error('Select the shop-chat area once before starting message alerts.');}chatState={ready:false,keys:[],candidate:null};$('capture-details').open=false;$('crop-details').open=false;state=createSession(crypto.randomUUID());baselineNote.textContent='Session starting mesos: waiting for a reliable reading';watching=true;mode=null;drag=null;$('badge').classList.add('live');$('badge').replaceChildren(Object.assign(document.createElement('span'),{className:'dot'}),document.createTextNode(' Watching'));controls();await tick();}catch(e){stop(e.message);$('status').classList.add('error');}};
-function row(entry,example=false){const r=document.createElement('div');r.className='sale-row';const time=document.createElement('time');time.textContent=new Date(entry.time).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});const text=document.createElement('div'),name=document.createElement('strong'),note=document.createElement('small');name.textContent=entry.names;note.textContent=example?'Example only · no Discord message sent':entry.delivery+' · OCR reading';text.append(name,note);const amount=document.createElement('div');amount.className='amount';amount.replaceChildren(mesoAmt('+'+fmt(entry.amount)+' mesos',13));r.append(time,text,amount);return r;}
+$('start').onclick=async()=>{try{if($('webhook').value.trim())validWebhook();if(!storeRegionsReady(regions))throw Error('Keep Sold Items and personal mesos visible, then run Auto Select. Select Total Sales too only if this layout shows it.');if($('chat-alerts').checked&&$('webhook').value.trim()&&!regions.chat){selectRegion('chat');throw Error('Select the shop-chat area once before starting message alerts.');}chatState={ready:false,keys:[],candidate:null};$('capture-details').open=false;$('crop-details').open=false;state=createSession(crypto.randomUUID());baselineNote.textContent='Session starting mesos: waiting for a reliable reading';watching=true;mode=null;drag=null;$('badge').classList.add('live');$('badge').replaceChildren(Object.assign(document.createElement('span'),{className:'dot'}),document.createTextNode(' Watching'));controls();await tick();}catch(e){stop(e.message);$('status').classList.add('error');}};
+function row(entry,example=false){const r=document.createElement('div');r.className='sale-row';const time=document.createElement('time');time.textContent=new Date(entry.time).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});const text=document.createElement('div'),name=document.createElement('strong'),note=document.createElement('small');name.textContent=entry.names;note.textContent=example?'Example only · no Discord message sent':entry.delivery+' · OCR reading';text.append(name,note);const amount=document.createElement('div');amount.className='amount';amount.replaceChildren(mesoAmt(entry.kind==='unverified'?(entry.balanceChange>=0?'+':'')+fmt(entry.balanceChange)+' mesos balance change':'+'+fmt(entry.amount)+' mesos',13));r.append(time,text,amount);return r;}
 function renderSales(){try{localStorage.setItem('mw-sales',JSON.stringify(sales.slice(0,500)));}catch{}$('activity-empty').hidden=sales.length>0;$('sales').replaceChildren(...sales.map(s=>row(s)));$('sale-count').textContent=String(sales.filter(s=>s.corroborated===true).length);$('meso-count').replaceChildren(mesoAmt(fmt(sales.filter(s=>s.corroborated===true).reduce((a,s)=>a+s.amount,0)),13),document.createTextNode(' '),Object.assign(document.createElement('small'),{textContent:'mesos'}));$('export').disabled=!sales.length;}
 $('demo').onclick=()=>{if(sales.length)return;$('sales').replaceChildren(row({time:new Date().toISOString(),names:'Example: Steelies',amount:2500000},true));$('demo').textContent='Example shown below';};
-$('export').onclick=()=>{const safe=s=>{let v=String(s);if(/^[=+@\-\t\r]/.test(v))v="'"+v;return'"'+v.replaceAll('"','""')+'"';};const csv='Time,Items,Total increase (mesos),Delivery\r\n'+sales.map(s=>[s.time,s.names,s.amount,s.delivery].map(safe).join(',')).join('\r\n');const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download='mesoswatch-sales.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
+$('export').onclick=()=>{const safe=s=>{let v=String(s);if(/^[=+@\-\t\r]/.test(v))v="'"+v;return'"'+v.replaceAll('"','""')+'"';};const csv='Time,Items,Total increase (mesos),Delivery\r\n'+sales.map(s=>[s.time,s.names,s.kind==='unverified'?'':s.amount,s.delivery].map(safe).join(',')).join('\r\n');const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download='mesoswatch-sales.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
 function safeLink(value){try{const u=new URL(value);return u.protocol==='https:'?u.href:null;}catch{return null;}}
 const config=window.MESOSWATCH_CONFIG||{};const donation=safeLink(config.donationUrl);if(donation){$('donate').href=donation;$('donate').target='_blank';$('donate').rel='noopener noreferrer';$('donate').removeAttribute('aria-disabled');$('donate').classList.remove('disabled');$('donate').textContent=config.donationLabel||'Support Mesos-Watch ↗';$('donation-note').textContent='Thank you for supporting the project.';}
 const sponsor=config.sponsor||{},link=safeLink(sponsor.url);if(link&&sponsor.title){const a=document.createElement('a');a.href=link;a.target='_blank';a.rel='sponsored noopener noreferrer';const image=safeLink(sponsor.imageUrl);if(image){const img=document.createElement('img');img.src=image;img.alt=sponsor.title;img.loading='lazy';a.append(img);}else a.textContent=sponsor.title;$('ad-content').replaceChildren(a);}
@@ -147,7 +150,7 @@ async function readBalance(w){
  if(!regions.balance)return null;
  showCrop('balance-crop',crop('balance',2));
  await w.setParameters({tessedit_pageseg_mode:'7',tessedit_char_whitelist:'0123456789, .'});
- const source=crop('balance',4),a=await w.recognize(prepare(source)),b=await w.recognize(prepare(source,true));
+ let source=crop('balance',4);const ink=numericInkBounds(source.getContext('2d',{willReadFrequently:true}).getImageData(0,0,source.width,source.height),4);if(ink){const tight=document.createElement('canvas');tight.width=ink.w;tight.height=ink.h;tight.getContext('2d').drawImage(source,ink.x,ink.y,ink.w,ink.h,0,0,ink.w,ink.h);source=tight;}const a=await w.recognize(prepare(source)),b=await w.recognize(prepare(source,true));
  const first=parseTotal(a.data.text),second=parseTotal(b.data.text);
  const reliable=first!==null&&first===second&&Math.min(a.data.confidence,b.data.confidence)>=65;
  $('balance-reading').replaceChildren(reliable?mesoAmt(fmt(first),15):document.createTextNode('Unclear'));
@@ -174,13 +177,13 @@ async function autoDetect(background=false){
   const found=detection.regions;debugCapture({detected:found,confidence:detection.confidence});
   if(detection.cancelled){status('Capture changed while detecting. Run Auto Select again on the current frame.',true);return;}
   if(!stream)return;
-  if(background&&(!found.total||!found.items||!found.balance)){stop('Could not relocate all store evidence areas. Review Auto Select before restarting.');return;}
-  if(background&&regions.chat&&regions.sale&&found.sale&&['x','y','w','h'].some(k=>Math.abs(regions.sale[k]-found.sale[k])>5)){stop('Store layout moved. Reselect shop chat before restarting to avoid sending the wrong area.');return;}
-  regions={...found,...(regions.chat?{chat:regions.chat}:{})};layoutSig=regionSig();
-  if(background){status(found.total?'Your windows moved. Areas re-detected automatically; still watching.':'Your windows moved and the Sales total could not be found again. Keep Sold Items visible or select it manually.',!found.total);return;}
-  if(regions.total&&regions.items)await reading();else if(regions.balance)await readBalance(w);
-  const missing=[];if(!found.total||!found.items)missing.push('Sold Items / Total Sales');if(!found.balance)missing.push('personal mesos');
-  status(missing.length?'Auto-detection could not confidently locate '+missing.join(' and ')+' after alternate OCR passes. Keep both panels unobstructed and try Auto Select again; missing regions remain unselected.':'Found Sold Items, Total Sales, and your personal mesos. Check the highlighted areas before starting.'+(found.totalEstimated?' The Total Sales number was hard to read, so its area is an estimate: make sure the highlight covers the number.':''),missing.length>0);
+  if(background&&!storeRegionsReady(found)){stop('Could not relocate all store evidence areas. Review Auto Select before restarting.');return;}
+  if(background&&!found.chat&&regions.chat&&regions.sale&&found.sale&&['x','y','w','h'].some(k=>Math.abs(regions.sale[k]-found.sale[k])>5)){stop('Store layout moved. Reselect shop chat before restarting to avoid sending the wrong area.');return;}
+  regions={...found,...(!found.chat&&regions.chat?{chat:regions.chat}:{})};layoutSig=regionSig();
+  if(background){status(storeRegionsReady(found)?'Your windows moved. Areas re-detected automatically; still watching.':'Your windows moved and the Sales total could not be found again. Keep Sold Items visible or select it manually.',!found.total);return;}
+  if(storeRegionsReady(regions))await reading();else if(regions.balance)await readBalance(w);
+  const missing=[];if(!found.items||(found.mode!=='sold-items'&&!found.total))missing.push('Sold Items / Total Sales');if(!found.balance)missing.push('personal mesos');
+  status(missing.length?'Auto-detection could not confidently locate '+missing.join(' and ')+' after alternate OCR passes. Keep both panels unobstructed and try Auto Select again; missing regions remain unselected.':found.mode==='sold-items'?'Found Sold Items and your personal mesos'+(found.chat?' and shop chat':'')+'. No Total Sales is shown in this layout; balance and item changes remain unverified.':'Found Sold Items, Total Sales, and your personal mesos. Check the highlighted areas before starting.'+(found.totalEstimated?' The Total Sales number was hard to read, so its area is an estimate: make sure the highlight covers the number.':''),missing.length>0);
  }catch(e){debugCapture({failure:e.message});status('Auto-detection unavailable: '+e.message+' You can select the areas manually.',true);}
  finally{busy=false;checking=false;controls();}
 }
@@ -202,7 +205,7 @@ window.dispatchEvent(new Event('mesoswatch:capture-ready'));
 
 // Personal sales history survives reloads (this browser only).
 const notified=new Set();
-try{const saved=JSON.parse(localStorage.getItem('mw-sales')||'[]');if(Array.isArray(saved)){sales=saved.filter(e=>e&&typeof e.time==='string'&&Number.isFinite(e.amount)).slice(0,500);renderSales();}}catch{}
+try{const saved=JSON.parse(localStorage.getItem('mw-sales')||'[]');if(Array.isArray(saved)){sales=saved.filter(e=>e&&typeof e.time==='string'&&(Number.isFinite(e.amount)||(e.kind==='unverified'&&Number.isFinite(e.balanceChange)))).slice(0,500);renderSales();}}catch{}
 window.addEventListener('mesoswatch:clear-sales',()=>{sales=[];renderSales();});
 
 // A confirmed sale goes to the price board only when the evidence is unambiguous: one item name read reliably and the

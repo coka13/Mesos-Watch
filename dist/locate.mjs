@@ -75,6 +75,23 @@ export function locateRegions(words,width,height,scale=1,coinScore=()=>0){
   shop={x:left,y:Math.min(listTop,title?title.y-6*scale:listTop)-4*scale,w:right-left};shop.h=bottom-shop.y;
   result.sale=rect(shop);
  }
+ // Some Classic shop layouts have a scrolling Sold Items panel with no cumulative Sales total.
+ // Locate repeated Buyer / Number purchased records independently; never substitute the personal balance for Sales.
+ if(!totalLabel&&!result.items){
+  const entries=[];
+  for(const buyer of lines.filter(l=>/^buyer\s*[:;]/i.test(l.text))){
+   const quantity=lines.find(l=>/^(?:number|numher|murnber|humber)\s*purchased\s*[:;]?\s*\d+\b/i.test(l.text)&&l.y>buyer.y&&l.y-buyer.y<buyer.h*3&&Math.abs(l.x-buyer.x)<buyer.h*2);
+   const name=lines.filter(l=>l.y<buyer.y&&buyer.y-l.y<buyer.h*2.5&&Math.abs(l.x-buyer.x)<buyer.h*2&&!/buyer|purchased|total|store/i.test(l.text)).sort((a,b)=>b.y-a.y)[0];
+   if(quantity&&name)entries.push({buyer,quantity,name});
+  }
+  const groups=[];for(const entry of entries){const group=groups.find(g=>Math.abs(g[0].buyer.x-entry.buyer.x)<entry.buyer.h*2);if(group)group.push(entry);else groups.push([entry]);}
+  const candidates=groups.filter(g=>g.length>=2);
+  if(candidates.length===1){const entries=candidates[0],text=entries.flatMap(e=>[e.name,e.buyer,e.quantity]),bounds=union(text);
+   result.items=rect({x:bounds.x-4*scale,y:bounds.y-3*scale,w:bounds.w+8*scale,h:bounds.h+6*scale});
+   result.sale=rect({x:bounds.x-40*scale,y:bounds.y-3*scale,w:bounds.w+44*scale,h:bounds.h+6*scale});
+   result.mode='sold-items';shop={x:bounds.x-40*scale,y:bounds.y-3*scale,w:bounds.w+44*scale,h:bounds.h+6*scale};
+  }
+ }
  const inventory=lines.find(l=>/\binventory\b/i.test(l.text));
  const followedByMesos=w=>words.some(o=>/^m[e3]s[o0]s?$/i.test(o.text)&&o.x>w.x+w.w&&o.x-(w.x+w.w)<w.h*1.5&&Math.abs(o.y-w.y)<w.h*.6);
  // The balance box's border often drags OCR confidence to 0 ("50,615)"), so a strong gold-coin match may stand in for confidence;
@@ -82,9 +99,18 @@ export function locateRegions(words,width,height,scale=1,coinScore=()=>0){
  const digits=w=>parseTotal(w.text.replace(/^[^\d]+|[^\d]+$/g,''));
  const inInventory=w=>!!inventory&&w.y>inventory.y&&w.y<inventory.y+450*scale&&Math.abs(w.x-inventory.x)<230*scale;
  const inventoryMesos=w=>inInventory(w)&&words.some(label=>/^mesos?[:;]?$/i.test(label.text)&&label.x+label.w<=w.x&&w.x-label.x-label.w<150*scale&&Math.abs(label.y-w.y)<Math.max(label.h,w.h)*.6);
+ const close=lines.find(l=>/^close?store$/.test(fold(l.text).replace(/[^a-z]/g,'')));
+ const controls=close&&(result.mode==='sold-items'||lines.some(l=>['openstore','solditems'].includes(fold(l.text).replace(/[^a-z]/g,''))&&l.y<close.y&&close.y-l.y<100*scale&&Math.abs(l.x-close.x)<70*scale));
+ const controlMoney=controls?words.map(amount).filter(w=>w&&w.confidence>=50&&w.x>=close.x-50*scale&&w.x+w.w<=close.x+120*scale&&w.y>=close.y+close.h*.6&&w.y<close.y+close.h+28*scale):[];
  const money=words.filter(w=>digits(w)!==null&&w.w>=w.h*.8&&(!followedByMesos(w)||inInventory(w))&&(!shop||w.x<shop.x||w.x>shop.x+shop.w||w.y<shop.y||w.y>shop.y+shop.h)).filter(w=>!inventory||(w.y>inventory.y&&w.y<inventory.y+450*scale&&Math.abs(w.x-inventory.x)<230*scale)).map(w=>({word:w,score:inventoryMesos(w)?1:coinScore(w)})).filter(c=>c.score>=.025).sort((a,b)=>b.score-a.score);
  // Never choose between multiple money-looking fields without a clear winner.
  if(money.length===1||(money.length>1&&money[0].score>=money[1].score*2.5)){const w=money[0].word;result.balance=rect({x:w.x-2*scale,y:w.y-2*scale,w:w.w+4*scale,h:w.h+4*scale});}
+ if(controls&&controlMoney.length===0){result.balance=rect({x:close.x-25*scale,y:close.y+close.h+8*scale,w:close.w+35*scale,h:Math.max(close.h*3,22*scale)});result.balanceEstimated=true;}
+ if(controls&&result.mode==='sold-items'){
+  const messages=lines.filter(l=>/\bhas\s+(?:entered|left)\b/i.test(l.text)&&l.x>close.x+close.w&&l.x<shop.x&&l.y>close.y+close.h);
+  if(messages.length>=3){const b=union(messages);result.chat=rect({x:b.x-4*scale,y:b.y-4*scale,w:Math.min(shop.x-b.x-8*scale,b.w+40*scale),h:b.h+8*scale});}
+ }
+ if(controlMoney.length===1){const w=controlMoney[0];result.balance=rect({x:w.x-2*scale,y:w.y-2*scale,w:w.w+4*scale,h:w.h+4*scale});}
  return result;
 }
 
