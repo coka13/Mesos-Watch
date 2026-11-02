@@ -104,3 +104,13 @@ assert.equal(verifySales([rec('Ghost Suit','x')],-5,{prices}).verified,false);
 r=step(s,{balance:null,records:sold});assert.equal(r.kind,'unreadable');assert.equal(r.state.balanceRef,s.balanceRef,'interruption keeps state');
 assert.equal(step(s,{balance:257334,records:sold,confidence:20}).kind,'unreadable');
 console.log('Reference store screenshot: Auto Select finds balance, Sold Items and chat; balance 237,275 read; records, visitors, fee-checked sales, unrelated transactions and uncertain events passed.');
+
+// ---- Community scanner on the same frame: it is the player's own store, so nothing is submitted as an FM listing ----
+import {readShop} from '../dist/shop.mjs';
+for(const [name,pass]of Object.entries(fx.passes)){
+ const shop=readShop(tsvWords(pass.tsv));
+ if(name==='original')assert.equal(shop.ownStore,true,'scanner pass recognises own-store controls ("SOLOITERS", "CLOS STORE")');
+ assert.deepEqual(shop.listings.map(l=>[l.item,l.price]),[['Tiger Mask',19679],['Grey Skull Overall',20679],['Pumpkin Hat',22679]],name+': active listings only; greyed sold-out rows skipped');
+}
+assert.equal(readShop([{text:'Buy',x:10,y:10,w:20,h:10,confidence:90}]).ownStore,false);
+console.log('Scanner on the reference frame: correct asking prices, sold-out rows skipped, own store recognised and not shared.');

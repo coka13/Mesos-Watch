@@ -20,8 +20,13 @@ function statLine(text){
  const found=STATS.find(([re])=>re.test(m[1].trim()));return found?[found[1],+m[2]]:null;
 }
 
+// Controls only the owner sees on their own store. Those listings belong to My Store / Player Stores, not the FM scan.
+const OWN_CONTROLS=['solditems','openstore','closestore'];
+function near(a,b){const d=Array.from({length:b.length+1},(_,i)=>i);for(let i=1;i<=a.length;i++){let p=d[0];d[0]=i;for(let j=1;j<=b.length;j++){const t=d[j];d[j]=Math.min(d[j]+1,d[j-1]+1,p+(a[i-1]===b[j-1]?0:1));p=t;}}return d[b.length]<=2;}
+export const ownStoreVisible=lines=>lines.some(l=>{const k=l.text.toLowerCase().replace(/0/g,'o').replace(/[^a-z]/g,'');return k.length>=7&&k.length<=12&&OWN_CONTROLS.some(c=>near(k,c));});
+
 export function readShop(words){
- const lines=rowsOf(words),listings=[];
+ const lines=rowsOf(words),listings=[],ownStore=ownStoreVisible(lines);
  for(const line of lines){
   const strict=PRICE.exec(line.text),loose=strict?null:LOOSE.exec(line.text);if(!strict&&!loose)continue;
   const qty=strict?+strict[1]:null,bundle=+(strict?strict[2]:loose[1]).replace(/[,.]/g,'');
@@ -38,7 +43,7 @@ export function readShop(words){
    nameBox:{x:Math.round(name.x-h*.3),y:Math.round(name.y-h*.25),w:Math.round(name.w+h*.8),h:Math.round(name.h+h*.5)},
    priceBox:{x:Math.round(left),y:Math.round(line.y-h*.3),w:Math.round(line.x+line.w-left+h*.6),h:Math.round(line.h+h*.6)},box:{x:name.x,y:name.y,w:Math.max(name.w,line.x+line.w-name.x),h:line.y+line.h-name.y},icon:{x:Math.round(name.x-h*3.4),y:Math.round(name.y-h*.25),w:Math.round(h*2.9),h:Math.round(h*2.9)}});
  }
- if(!listings.length)return{listings,shopTitle:'',map:'',channel:null};
+ if(!listings.length)return{listings,shopTitle:'',map:'',channel:null,ownStore};
 
  // Title bar: the top line in the listing column, well above the first listing, that is not a button or a number.
  const first=listings.reduce((a,b)=>a.box.y<b.box.y?a:b),hh=first.box.h/2;
@@ -60,7 +65,7 @@ export function readShop(words){
  // Minimap titles read "<Free Market> Free Market Entrance": keep the room name after the region tag.
  const map=mapLine?cleanName(mapLine.text.replace(/^.*[>\]]\s*(?=\S)/,'').replace(/^[<\[]\s*/,'')).slice(0,40):'';
  const ch=lines.map(l=>/\bch(?:annel)?\.?\s*(\d{1,2})\b/i.exec(l.text)).find(Boolean);
- return{listings,shopTitle,map,channel:ch?+ch[1]:null};
+ return{listings,shopTitle,map,channel:ch?+ch[1]:null,ownStore};
 }
 
 export const readShopListings=words=>readShop(words).listings.filter(l=>l.certain).map(({item,price,qty})=>({item,price,qty}));

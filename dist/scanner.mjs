@@ -75,6 +75,7 @@ async function scanOnce(){
    return found;
   });
   st.scans++;
+  if(shop.ownStore){st.last=[];drawOverlay(video,[],[]);status('This is your own store (its Sold Items / Close Store buttons are visible), so it is not shared as an FM listing. Track it in My Store, or publish it under Player Stores.','warn');return;}
   const listings=shop.listings;
   st.lastFound=listings.length;
   const world=$('world').value||'',fresh=confirmed(st.last,listings).filter(l=>!st.sent.has(world+'|'+listingKey(l)));
