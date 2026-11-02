@@ -125,6 +125,7 @@ header{display:flex;flex-wrap:wrap;align-items:center;gap:12px 18px;justify-cont
 .data-table tbody tr:hover td{background:#fff8e2}
 .data-table .num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 .data-table .num .meso-amt{justify-content:flex-end}
+.data-table th .meso{vertical-align:middle}
 .data-table td.stats{color:var(--maple)}
 .data-table td.muted,.muted{color:var(--muted)}
 .data-table td.when{color:var(--muted);font-size:12px;white-space:nowrap}

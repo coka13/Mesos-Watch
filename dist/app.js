@@ -3,14 +3,14 @@ import {discordBody} from './notifications.mjs?v=reader-5';
 import {createSession,observeStore} from './store-session.mjs?v=phase3-1';
 import {parseTotal,chooseItemReading} from './detection.mjs?v=reader-4';
 import {tsvWords,locateRegions,frameScale,coinScorer} from './locate.mjs?v=autoselect-3';
-import {reportObservations,configured as boardConfigured} from './api.mjs?v=pc-4';
+import {reportObservations,configured as boardConfigured} from './api.mjs?v=ms-2';
 const $=id=>document.getElementById(id);
 const video=$('video'),preview=$('preview'),ctx=preview.getContext('2d');
 let stream=null,regions={},mode=null,drag=null,timer=null,watching=false,busy=false,worker=null,workerPromise=null,state=createSession(crypto.randomUUID()),sales=[],frame=null,checking=false;
 let chatState={ready:false,keys:[],candidate:null},chatCount=0;
 const fmt=n=>n.toLocaleString('en-US');
 const baselineNote=document.createElement('p');baselineNote.className='hint';baselineNote.id='session-baseline';baselineNote.textContent='Session starting mesos: not set';$('balance-note').after(baselineNote);
-const meso=(size=14)=>{const s=document.createElement('span');s.className='meso';s.style.setProperty('--m',size+'px');s.title='mesos';const i=document.createElement('img');i.src='meso.png?v=ms-1';i.alt='';i.width=i.height=size;i.decoding='async';s.append(i);return s;};
+const meso=(size=14)=>{const s=document.createElement('span');s.className='meso';s.style.setProperty('--m',size+'px');s.title='mesos';const i=document.createElement('img');i.src='meso.png?v=ms-2';i.alt='';i.width=i.height=size;i.decoding='async';s.append(i);return s;};
 const mesoAmt=(text,size=14)=>{const s=document.createElement('span');s.className='meso-amt';s.append(meso(size),document.createTextNode(String(text)));return s;};
 function status(text,error=false){$('status').textContent=text;$('status').classList.toggle('error',error);}
 function controls(){

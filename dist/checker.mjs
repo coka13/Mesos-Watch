@@ -1,5 +1,5 @@
 // Price Checker (home), item pages, Market Trends and Price History.
-import {configured,searchItems,getItem,itemSummary,currentListings,priceHistory,itemVariations,marketTrends,recentObservations,subscribe,iconUrl,baseStats,CATEGORY_LABEL,searchPaging} from './api.mjs?v=pc-4';
+import {configured,searchItems,getItem,itemSummary,currentListings,priceHistory,itemVariations,marketTrends,recentObservations,subscribe,iconUrl,baseStats,CATEGORY_LABEL,searchPaging} from './api.mjs?v=ms-2';
 import {chartSvg,shortMesos} from './chart.mjs?v=pc-1';
 const $=id=>document.getElementById(id);
 const fmt=n=>n==null?'—':Number(n).toLocaleString('en-US');
@@ -38,7 +38,7 @@ export function iconEl(item,size=32){
 const itemLink=(item,text)=>el('a',{href:'#item/'+item.id,className:'item-link'},iconEl(item,28),el('span',{textContent:text||item.name}));
 
 // Meso coin, beside every amount of mesos so a price never reads as a plain count. The sprite is the in-game mesos coin.
-export function mesoEl(size=14){return el('span',{className:'meso',style:`--m:${size}px`,title:'mesos'},el('img',{src:'mesos-coin.png',alt:'',width:size,height:size,decoding:'async'}));}
+export function mesoEl(size=14){return el('span',{className:'meso',style:`--m:${size}px`,title:'mesos'},el('img',{src:'meso.png?v=ms-2',alt:'',width:size,height:size,decoding:'async'}));}
 export const mesoAmt=(text,size=14)=>el('span',{className:'meso-amt'},mesoEl(size),document.createTextNode(String(text)));
 
 // ---- Search with autocomplete (used on the home page and in Price History) ----
@@ -140,7 +140,7 @@ async function loadTrends(){
  $('trends-note').textContent='Loading…';
  try{const rows=await marketTrends(world(),100);
   const moved=rows.filter(r=>r.change_pct!=null);
-  const fill=(id,list,val)=>$(id).replaceChildren(...(list.length?list.map(r=>el('li',{},itemLink(r),el('b',{textContent:val(r)}),el('small',{textContent:`${shortMesos(+r.median_now)} now · ${fmt(r.asks_7d)} seen · ${ago(r.last_seen)}`}))):[el('li',{className:'empty',textContent:'Not enough data yet: needs 3+ sightings in each of the last two weeks.'})]));
+  const fill=(id,list,val)=>$(id).replaceChildren(...(list.length?list.map(r=>el('li',{},itemLink(r),el('b',{textContent:val(r)}),el('small',{},mesoAmt(shortMesos(+r.median_now),11),document.createTextNode(` now · ${fmt(r.asks_7d)} seen · ${ago(r.last_seen)}`)))):[el('li',{className:'empty',textContent:'Not enough data yet: needs 3+ sightings in each of the last two weeks.'})]));
   fill('t-up',moved.filter(r=>+r.change_pct>0).sort((a,b)=>b.change_pct-a.change_pct).slice(0,10),r=>'▲ '+r.change_pct+'%');
   fill('t-down',moved.filter(r=>+r.change_pct<0).sort((a,b)=>a.change_pct-b.change_pct).slice(0,10),r=>'▼ '+Math.abs(r.change_pct)+'%');
   fill('t-most',rows.slice(0,15),r=>fmt(r.asks_7d)+' seen');

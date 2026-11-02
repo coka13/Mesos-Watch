@@ -1,7 +1,7 @@
 // Navigation, world picker, FM Megaphones and Settings (including admin moderation).
-import {NOT_SET_UP,configured,worlds,megaphonePlans,liveMegaphones,myMegaphones,startCheckout,moderateMegaphone,adminSignIn,adminState,signOut,moderationQueue,unverifiedItems,updateItem,catalogSyncLog,catalogSyncNow} from './api.mjs?v=pc-4';
+import {NOT_SET_UP,configured,worlds,megaphonePlans,liveMegaphones,myMegaphones,startCheckout,moderateMegaphone,adminSignIn,adminState,signOut,moderationQueue,unverifiedItems,updateItem,catalogSyncLog,catalogSyncNow} from './api.mjs?v=ms-2';
 import {checkMegaphone,MAX_MESSAGE} from './megaphone-rules.mjs?v=pc-1';
-import {show,worldChanged,ago,iconEl} from './checker.mjs?v=pc-7';
+import {show,worldChanged,ago,iconEl} from './checker.mjs?v=ms-3';
 const $=id=>document.getElementById(id);
 const el=(tag,props={},...kids)=>{const e=Object.assign(document.createElement(tag),props);e.append(...kids.filter(k=>k!=null&&k!==false));return e;};
 const money=c=>'$'+(c/100).toFixed(2);

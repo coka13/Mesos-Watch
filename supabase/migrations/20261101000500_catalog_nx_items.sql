@@ -1,6 +1,7 @@
 -- NX items: the automatic catalog update also downloads the MapleStory Classic cash shop (OSMS Data Explorer cash_shop.json)
 -- and imports it as category 'cash', exactly like supabase/import-catalog.mjs (checked by supabase/tests/sql.test.mjs).
 -- Run after 20261101000300_catalog_autosync.sql.
+-- Names are collapsed before trimming: some source names end in a line break ("Blue Dragon Horn\r\n"), which btrim alone keeps.
 
 alter table public.catalog_sync_log add column if not exists cash_request_id bigint;
 
@@ -22,7 +23,7 @@ begin
   create temporary table catalog_new on commit drop as
   with src as (
     select 0 as rank, (e ->> 'id')::integer as game_id,
-           regexp_replace(btrim(coalesce(e ->> 'name', '')), '\s+', ' ', 'g') as name,
+           btrim(regexp_replace(coalesce(e ->> 'name', ''), '\s+', ' ', 'g')) as name,
            e ->> 'category' as cat, e ->> 'sub_category' as sub,
            case when jsonb_typeof(e -> 'stats') = 'object' then e -> 'stats' else '{}'::jsonb end as s,
            e -> 'req_classes' as rc, e -> 'spec' as spec, e ->> 'description' as descr, null::jsonb as period
@@ -30,7 +31,7 @@ begin
     where jsonb_typeof(e -> 'id') = 'number' and (e ->> 'id') ~ '^[0-9]+$'
   ), cash as (
     select 1 as rank, (e ->> 'id')::integer as game_id,
-           regexp_replace(btrim(coalesce(e ->> 'name', '')), '\s+', ' ', 'g') as name,
+           btrim(regexp_replace(coalesce(e ->> 'name', ''), '\s+', ' ', 'g')) as name,
            'NX' as cat, coalesce(nullif(e ->> 'sub_category', ''), e ->> 'category') as sub,
            '{}'::jsonb as s, null::jsonb as rc, null::jsonb as spec, e ->> 'description' as descr, e -> 'period' as period
     from jsonb_array_elements(p_cash -> 'categories') c, jsonb_array_elements(case when jsonb_typeof(c -> 'items') = 'array' then c -> 'items' else '[]'::jsonb end) e

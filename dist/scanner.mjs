@@ -2,7 +2,7 @@
 // Screen reading only: no clicks, no keyboard input, no game memory. Players roam the FM however they like.
 import {tsvWords,frameScale} from './locate.mjs?v=autoselect-3';
 import {readShop,confirmed,listingKey,averageHash,shopKeyOf,parsePriceLine,cleanName} from './shop.mjs?v=pc-1';
-import {configured,reportObservations,shareIcon} from './api.mjs?v=pc-4';
+import {configured,reportObservations,shareIcon} from './api.mjs?v=ms-2';
 const $=id=>document.getElementById(id);
 const fmt=n=>Number(n).toLocaleString('en-US');
 const cap=()=>window.mesosCapture;
