@@ -16,6 +16,7 @@ The deployed assets would be `dist/`. No build step is required. Supabase suppli
 ## Data distinctions
 
 - Scanner observations are asking prices, never guaranteed available inventory.
+- My Store (Sold Items layout): a sale is verified only when a new Sold Items record (read the same by two OCR passes), a mesos increase equal to the sale price less the 3% store fee, and either the player's listed price or the buyer seen entering in shop chat all agree. Balance changes without a record are listed as "not a sale"; partial evidence is listed as uncertain. Only verified sales reach Discord. The starting balance is fixed for the session.
 - My Store OCR agreement is corroboration only. Submitted sale reports remain unverified until an admin reviews supporting evidence. Only reviewed sales enter sale valuation/history.
 - Public player listings are user-published and expire after 24 hours unless updated. Observation-assisted entries are explicitly labelled; assistance does not verify seller ownership or inventory.
 - Catalog imports preserve existing identities and records. New candidates require Classic release review with a source and timestamp. Legacy verified flags alone do not prove release availability.

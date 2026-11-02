@@ -2,6 +2,22 @@
 
 Status: source changes are local only. Do not treat historical checkmarks or catalog SQL seed files as proof of production setup. There are sixteen numbered migrations (00000–01500); the original eight are preserved unchanged.
 
+## Production state (read-only audit, 2026-11-02)
+
+Checked through the public API with the anon key (no private access was available: `SUPABASE_DB_URL` in `.env.local` is empty).
+
+- Applied: migrations 00000–00700. Not applied: 00800–01500 and 20261102000100 (`player_stores`, `watchlist`, `market_observations` and the other new tables do not exist yet). `megaphone_plans` already holds the three packages ($1.99/30 min, $3.99/2 h, $5.99/6 h).
+- `items`: 3,444 rows (equip 1,192 · use 345 · setup 231 · etc 253 · NX 1,423), all kept.
+- `observations`: 5 rows, all incorrect (see Cleanup). `megaphones`: 0 rows.
+
+## Deployment order
+
+1. Put the Session pooler connection string in `.env.local` as `SUPABASE_DB_URL` (never commit it).
+2. Back up: `node scripts/phase1-audit.mjs` writes a read-only JSON snapshot of every table to `../phase1-private-backup`. Also take a Supabase dashboard backup.
+3. Run the cleanup (below), then apply the missing migrations in filename order with `node scripts/run-sql.mjs supabase/migrations/<file>`, starting at 20261101000800 and ending with 20261102000100. Read item 4 under Prerequisites first: 00800 hides catalog items until their release status is reviewed.
+4. Redeploy the `megaphone-checkout` function (it now accepts an optional `item_id`) after 20261102000100 is applied.
+5. Publish `dist/`.
+
 ## Prerequisites before production changes
 
 1. Finish the Phase 1 production inventory and full backup, including protected users, catalog, legitimate sales, campaign/payment records, Storage binaries and service configuration. Verify restoration in an isolated project. The source ZIP/Git bundle are not database backups.
@@ -40,7 +56,13 @@ After recording actual source permission and scope, an authorized operator can s
 
 ## Cleanup
 
-`node scripts/preview-cleanup.mjs selection.json <private-output-directory>` accepts explicit observation IDs and a reason and creates a SELECT-only preview/snapshot. It requires SUPABASE_DB_URL privately in the process environment, uses a read-only repeatable-read transaction and has no delete path. Protect outputs with private Windows ACLs. It is not a disaster-recovery export. Production deletion still needs verified full backup/restore, exact criteria, protected-record review and specific authorization. None was performed.
+`supabase/cleanup/20261102_incorrect_listings.sql` removes exactly the 5 audited listings (ids 1–5, read from the owner's own store window by an earlier reader version; their prices don't match the store). It copies them to `cleanup_archive.observations_20261102` first, aborts without changes if the rows differ from the audit, and touches nothing else. Market figures are computed from `observations` on each request, so they reset with it; there is no stored aggregate or browser cache to clear. Item pages then show "No market data available yet" until new scans arrive.
+
+```powershell
+node scripts/run-sql.mjs supabase/cleanup/20261102_incorrect_listings.sql
+```
+
+To stop the same mistake recurring, the scanner no longer submits a shop window that shows the owner's controls (Sold Items / Open Store / Close Store). `scripts/preview-cleanup.mjs` remains for previewing other explicit ID selections.
 
 ## Rollback
 
