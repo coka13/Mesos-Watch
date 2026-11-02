@@ -25,8 +25,19 @@ Deno.serve(async (req) => {
       .eq('buyer', user.id).eq('status', 'awaiting_payment').gt('created_at', new Date(Date.now() - 3600e3).toISOString());
     if ((count ?? 0) >= 5) return json({ error: 'Too many unfinished checkouts. Finish or wait an hour.' }, 429, headers);
 
+    // Optional item reference: must be a whole positive id of an item visible in the public catalog.
+    let item_id: number | null = null;
+    if (body.item_id != null && body.item_id !== '') {
+      const id = Number(body.item_id);
+      if (!Number.isSafeInteger(id) || id <= 0) return json({ error: 'Choose the item again.' }, 400, headers);
+      const { data: item } = await db.from('visible_items').select('id').eq('id', id).maybeSingle();
+      if (!item) return json({ error: 'That item is not in the catalog.' }, 400, headers);
+      item_id = id;
+    }
+
     const { data: mega, error } = await db.from('megaphones').insert({
       buyer: user.id, message, sender, world, plan_id: plan.id, minutes: plan.minutes, price_cents: plan.price_cents, currency: plan.currency,
+      ...(item_id ? { item_id } : {}),
     }).select('id').single();
     if (error) throw error;
 

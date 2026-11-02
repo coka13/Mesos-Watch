@@ -120,7 +120,9 @@ export function baseStats(item){
 // ---- Megaphones ----
 export const megaphonePlans=async()=>rows((await client()).from('megaphone_plans').select('*').order('sort'),'Could not load megaphone plans');
 // Megaphones for this world plus those bought for all worlds (world ''). `in` with an empty string renders as an empty list, so use or/eq.
-export const liveMegaphones=async(world='')=>{const q=(await client()).from('live_megaphones').select('id,message,sender,world,ends_at');const w=String(world).replace(/["\\,()]/g,'');return rows((w?q.or(`world.eq."${w}",world.eq.""`):q.eq('world','')).order('starts_at'),'Could not load megaphones');};
+let megaItems=true;
+export const liveMegaphones=async(world='')=>{if(megaItems){try{return await liveMegaphonesWith(world,'id,message,sender,world,ends_at,item_id,item_name,item_game_id,item_icon_path,item_category');}catch{megaItems=false;}}return liveMegaphonesWith(world,'id,message,sender,world,ends_at');};
+const liveMegaphonesWith=async(world,cols)=>{const q=(await client()).from('live_megaphones').select(cols);const w=String(world).replace(/["\\,()]/g,'');return rows((w?q.or(`world.eq."${w}",world.eq.""`):q.eq('world','')).order('starts_at'),'Could not load megaphones');};
 export async function myMegaphones(){const sb=await session();const {data:u}=await sb.auth.getUser();if(!u.user)return[];return rows(sb.from('megaphone_queue').select('id,message,sender,plan_id,minutes,price_cents,status,display_status,starts_at,ends_at,reject_reason,created_at,livemode').eq('buyer',u.user.id).order('created_at',{ascending:false}).limit(20),'Could not load your megaphones');}
 async function invoke(name,body){
  const sb=await session();

@@ -99,6 +99,7 @@
     <p class="hint">Sign in under Player Stores before checkout. Packages buy campaign time in a fair rotation, not continuous display or a guaranteed number of views. Stripe sandbox mode stays on until production is configured.</p><div id="mg-plans" class="plans" role="radiogroup" aria-label="Duration"></div>
     <label for="mg-sender">Your name in the megaphone (optional)</label><input id="mg-sender" maxlength="20" autocomplete="off" placeholder="e.g. your IGN">
     <label for="mg-message">Message <span id="mg-count" class="count">0/120</span></label><textarea id="mg-message" maxlength="120" rows="3" placeholder="WTS Steelies 1.2m, ch 3 FM 7 · shop “Cheap Stars”"></textarea>
+    <label for="mg-item">Item to feature (optional)</label><div class="mg-item-pick"><input id="mg-item" type="search" autocomplete="off" spellcheck="false" placeholder="Search the catalog…" aria-controls="mg-item-list"><button id="mg-item-clear" type="button" hidden>Remove item</button></div><ul id="mg-item-list" class="suggest mg-suggest" hidden></ul>
     <ul id="mg-errors" class="errors"></ul>
     <div class="mg-preview-wrap"><span class="hint">Preview</span><div id="mg-preview" class="mega-strip"></div></div>
     <button id="mg-buy" class="primary" type="submit" disabled>Choose a duration</button>

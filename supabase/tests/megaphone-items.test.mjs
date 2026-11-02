@@ -1,0 +1,27 @@
+// Megaphone item references (migration 20261102000100) on the full migration stack. Run: npm test
+import {PGlite} from '@electric-sql/pglite';
+import {pg_trgm} from '@electric-sql/pglite/contrib/pg_trgm';
+import fs from 'node:fs';import assert from 'node:assert/strict';
+const db=new PGlite({extensions:{pg_trgm}});
+await db.exec(`create schema auth;create table auth.users(id uuid primary key,email text);create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;create role anon nologin;create role authenticated nologin;create role service_role nologin bypassrls;grant usage on schema public,auth to anon,authenticated,service_role;`);
+for(const f of fs.readdirSync('supabase/migrations').filter(f=>f.endsWith('.sql')).sort())await db.exec(fs.readFileSync('supabase/migrations/'+f,'utf8'));
+const A='00000000-0000-0000-0000-00000000000a';
+await db.exec(`insert into auth.users values('${A}','a@example.test')`);
+await db.exec(`insert into megaphone_plans(id,label,minutes,price_cents,active,sort) values('t30','30 minutes',30,199,true,99) on conflict (id) do nothing`);
+const item=(await db.query(`insert into items(name,game_id,category,source,verified) values('Featured Hat',1002999,'equip','catalog',true) returning id`)).rows[0].id;
+await db.query(`update items set release_status='released' where id=$1`,[item]);
+const hidden=(await db.query(`insert into items(name,game_id,category,source,verified) values('Unreleased Hat',1002998,'equip','catalog',true) returning id`)).rows[0].id;
+const live=async(itemId)=>(await db.query(`insert into megaphones(buyer,message,plan_id,minutes,price_cents,status,starts_at,ends_at,item_id) values($1,'Selling a hat ch 3 FM 7','t30',30,199,'scheduled',now()-interval '1 minute',now()+interval '29 minutes',$2) returning id`,[A,itemId])).rows[0].id;
+const withItem=await live(item),without=await live(null),unreleased=await live(hidden);
+const anon=async sql=>{await db.exec('set role anon');try{return(await db.query(sql)).rows;}finally{await db.exec('reset role');}};
+const rows=await anon(`select id,item_id,item_name,item_game_id,item_category from live_megaphones order by item_name nulls last`);
+const featured=rows.find(r=>r.id===withItem),plain=rows.find(r=>r.id===without);
+assert.ok(featured&&plain,'both campaigns visible to visitors');
+assert.equal(featured.item_name,'Featured Hat');assert.equal(Number(featured.item_game_id),1002999);assert.equal(featured.item_category,'equip');
+assert.equal(plain.item_id,null);assert.equal(plain.item_name,null);
+assert.equal(rows.find(r=>r.id===unreleased).item_name,null,'unreleased items are never surfaced in a megaphone');
+await assert.rejects(db.query(`insert into megaphones(buyer,message,plan_id,minutes,price_cents,item_id) values($1,'Selling a hat ch 3','t30',30,199,987654321)`,[A]),/foreign key/,'unknown items refused');
+await db.query(`delete from items where id=$1`,[item]);
+assert.equal((await db.query(`select item_id from megaphones where id=$1`,[withItem])).rows[0].item_id,null,'campaign kept when its item is deleted');
+assert.equal((await anon(`select count(*)::int n from live_megaphones`))[0].n,3);
+console.log('Megaphone items: optional reference, icon fields for visitors, unknown items refused, campaign kept on item deletion: ok');

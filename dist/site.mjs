@@ -1,5 +1,5 @@
 // Navigation, world picker, FM Megaphones and Settings (including admin moderation).
-import {NOT_SET_UP,configured,worlds,megaphonePlans,liveMegaphones,myMegaphones,startCheckout,moderateMegaphone,adminSignIn,adminState,signOut,moderationQueue,unverifiedItems,updateItem,catalogSyncLog,catalogSyncNow} from './api.mjs?v=ms-2';
+import {searchItems,NOT_SET_UP,configured,worlds,megaphonePlans,liveMegaphones,myMegaphones,startCheckout,moderateMegaphone,adminSignIn,adminState,signOut,moderationQueue,unverifiedItems,updateItem,catalogSyncLog,catalogSyncNow} from './api.mjs?v=ms-2';
 import {checkMegaphone,MAX_MESSAGE} from './megaphone-rules.mjs?v=pc-1';
 import {show,worldChanged,ago,iconEl} from './checker.mjs?v=ms-2';
 const $=id=>document.getElementById(id);
@@ -47,7 +47,7 @@ async function loadStrip(){
 }
 function showStrip(){
  strip=strip.filter(m=>new Date(m.ends_at)>new Date());$('mega-strip').hidden=!strip.length;if(!strip.length)return;const m=strip[stripIdx++%strip.length];
- $('mega-text').replaceChildren(...[m.sender&&el('b',{textContent:m.sender+' : '}),document.createTextNode(m.message)].filter(Boolean));
+ $('mega-text').replaceChildren(...[megaItem(m),m.sender&&el('b',{textContent:m.sender+' : '}),document.createTextNode(m.message)].filter(Boolean));
  $('mega-pos').textContent=strip.length>1?`${(stripIdx-1)%strip.length+1}/${strip.length}`:'';
 }
 setInterval(loadStrip,60000);
@@ -71,10 +71,17 @@ function renderPlans(list){
   return el('label',{className:'plan',htmlFor:id},input,el('strong',{textContent:p.label}),el('b',{textContent:money(p.price_cents)}),el('small',{textContent:planNote(p,list)}));}));
  chosen=chosen||list[0]?.id;preview();
 }
+// Featured item: a link with the item's icon, ahead of the message.
+function megaItem(m){if(!m?.item_id||!m.item_name)return null;return el('a',{className:'mega-item',href:'#item/'+m.item_id},iconEl({id:m.item_id,name:m.item_name,game_id:m.item_game_id,icon_path:m.item_icon_path,category:m.item_category},20),el('span',{textContent:m.item_name}));}
+let mgItem=null,mgTimer=null;
+function pickItem(item){mgItem=item;$('mg-item').value=item?item.name:'';$('mg-item-clear').hidden=!item;$('mg-item-list').hidden=true;preview();}
+$('mg-item').oninput=()=>{clearTimeout(mgTimer);const q=$('mg-item').value.trim();if(mgItem&&q!==mgItem.name)mgItem=null;$('mg-item-clear').hidden=!mgItem;if(q.length<2||!configured()){$('mg-item-list').hidden=true;preview();return;}
+ mgTimer=setTimeout(async()=>{try{const rows=(await searchItems(q,sel.value,8,0))||[];$('mg-item-list').replaceChildren(...rows.map(r=>{const item={id:r.id??r.item_id,name:r.name,game_id:r.game_id,icon_path:r.icon_path,category:r.category};return el('li',{role:'option',tabIndex:0,onclick:()=>pickItem(item),onkeydown:e=>{if(e.key==='Enter'){e.preventDefault();pickItem(item);}}},iconEl(item,24),el('span',{textContent:item.name}));}));$('mg-item-list').hidden=!rows.length;}catch{$('mg-item-list').hidden=true;}},250);};
+$('mg-item-clear').onclick=()=>pickItem(null);
 function preview(){
  const r=checkMegaphone({message:$('mg-message').value,sender:$('mg-sender').value});
  $('mg-count').textContent=`${$('mg-message').value.length}/${MAX_MESSAGE}`;
- $('mg-preview').replaceChildren(el('span',{className:'mega-label',textContent:'📢 Megaphone'}),el('span',{className:'mega-text'},...[r.sender&&el('b',{textContent:r.sender+' : '}),document.createTextNode(r.message||'Your message appears here')].filter(Boolean)));
+ $('mg-preview').replaceChildren(el('span',{className:'mega-label',textContent:'📢 Megaphone'}),el('span',{className:'mega-text'},...[mgItem&&megaItem({item_id:mgItem.id,item_name:mgItem.name,item_game_id:mgItem.game_id,item_icon_path:mgItem.icon_path,item_category:mgItem.category}),r.sender&&el('b',{textContent:r.sender+' : '}),document.createTextNode(r.message||'Your message appears here')].filter(Boolean)));
  $('mg-errors').replaceChildren(...r.errors.filter(e=>$('mg-message').value||!/at least/.test(e)).map(e=>el('li',{textContent:e})));
  $('mg-buy').disabled=!configured()||!!r.errors.length||!chosen;
  const p=plans.find(x=>x.id===chosen);$('mg-buy').textContent=p?`Pay ${money(p.price_cents)} · secure checkout`:'Choose a duration';
@@ -89,7 +96,7 @@ async function refreshMine(){
 $('mg-message').oninput=preview;$('mg-sender').oninput=preview;
 $('mg-form').onsubmit=async e=>{e.preventDefault();const r=checkMegaphone({message:$('mg-message').value,sender:$('mg-sender').value});if(r.errors.length)return preview();
  $('mg-buy').disabled=true;note('Opening secure checkout…','');
- try{const out=await startCheckout({message:r.message,sender:r.sender,world:sel.value,plan_id:chosen});location.href=out.url;}
+ try{const out=await startCheckout({message:r.message,sender:r.sender,world:sel.value,plan_id:chosen,...(mgItem?{item_id:mgItem.id}:{})});location.href=out.url;}
  catch(e){note(e.message,'error');preview();}};
 
 // Admin links appear only for a signed-in admin. The server enforces every admin action regardless.
