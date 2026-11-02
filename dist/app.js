@@ -1,10 +1,11 @@
+import {detectStoreRegions,enhanceFramePixels} from './auto-select.mjs?v=autoselect-4';
 import {deliverDiscord} from './discord-delivery.mjs';
 import {sourcePoint,validRegion} from './capture-geometry.mjs';
 import {observeChat} from './chat.mjs?v=reader-4';
 import {discordBody} from './notifications.mjs?v=reader-5';
 import {createSession,observeStore} from './store-session.mjs?v=phase3-1';
 import {parseTotal,chooseItemReading} from './detection.mjs?v=reader-4';
-import {tsvWords,locateRegions,frameScale,coinScorer} from './locate.mjs?v=autoselect-3';
+import {tsvWords,locateRegions,frameScale,coinScorer} from './locate.mjs?v=autoselect-4';
 import {reportObservations,configured as boardConfigured} from './api.mjs?v=ms-2';
 const $=id=>document.getElementById(id);
 const video=$('video'),preview=$('preview'),ctx=preview.getContext('2d');
@@ -12,7 +13,8 @@ let stream=null,regions={},mode=null,drag=null,timer=null,watching=false,busy=fa
 let chatState={ready:false,keys:[],candidate:null},chatCount=0;
 const fmt=n=>n.toLocaleString('en-US');
 const debugBox=document.createElement('details');debugBox.className='privacy';debugBox.innerHTML='<summary>Local capture diagnostics</summary><p>Coordinates and OCR from your selected store regions stay on this page. Do not share diagnostics containing private chat.</p><pre id="capture-debug"></pre>';preview.parentElement.after(debugBox);
-function debugCapture(data){$('capture-debug').textContent=JSON.stringify({source:{width:video.videoWidth,height:video.videoHeight},regions,...data},null,2);}
+let lastAutoDetection={};
+function debugCapture(data){$('capture-debug').textContent=JSON.stringify({source:{width:video.videoWidth,height:video.videoHeight},regions,...lastAutoDetection,...data},null,2);}
 video.addEventListener('resize',()=>{if(!stream)return;stop('Capture resolution changed. Re-detecting regions; review them before restarting.');regions={};layoutSig=null;debugCapture({failure:'Source resolution changed'});if(!busy&&!checking)autoDetect();});
 const baselineNote=document.createElement('p');baselineNote.className='hint';baselineNote.id='session-baseline';baselineNote.textContent='Session starting mesos: not set';$('balance-note').after(baselineNote);
 const meso=(size=14)=>{const s=document.createElement('span');s.className='meso';s.style.setProperty('--m',size+'px');s.title='mesos';const i=document.createElement('img');i.src='meso.png?v=ms-1';i.alt='';i.width=i.height=size;i.decoding='async';s.append(i);return s;};
@@ -157,14 +159,20 @@ async function autoDetect(background=false){
  busy=true;checking=true;mode=null;drag=null;controls();
  try{
   status('Looking for Sold Items, sales totals, and your mesos balance…');
-  const scale=frameScale(video.videoWidth),c=document.createElement('canvas');
+  const captureStream=stream,sourceWidth=video.videoWidth,sourceHeight=video.videoHeight;
+  if(!sourceWidth||!sourceHeight||video.readyState<2)throw Error('The shared video has not produced a frame yet. Wait for the preview, then retry Auto Select.');
+  const scale=frameScale(sourceWidth),c=document.createElement('canvas');
   c.width=Math.round(video.videoWidth*scale);c.height=Math.round(video.videoHeight*scale);
   const g=c.getContext('2d',{willReadFrequently:true});g.imageSmoothingEnabled=false;g.drawImage(video,0,0,c.width,c.height);
-  const w=await getWorker();await w.setParameters({tessedit_pageseg_mode:'11',tessedit_char_whitelist:''});
-  const result=await w.recognize(c,{}, {text:true,tsv:true});
-  const pixels=g.getImageData(0,0,c.width,c.height);
-  const coinScore=coinScorer(pixels,scale);
-  const found=locateRegions(tsvWords(result.data.tsv),c.width,c.height,scale,coinScore);debugCapture({detected:found,confidence:result.data.confidence,missing:['total','items','balance'].filter(k=>!found[k])});
+  const w=await getWorker(),pixels=g.getImageData(0,0,c.width,c.height),coinScore=coinScorer(pixels,scale);
+  const detection=await detectStoreRegions({width:c.width,height:c.height,scale,sourceWidth,sourceHeight,coinScore,
+   isCurrent:()=>stream===captureStream&&video.videoWidth===sourceWidth&&video.videoHeight===sourceHeight,
+   onProgress:({attempt,pass})=>status('Finding store regions · OCR pass '+attempt+'/3 ('+pass+')…'),
+   recognize:async pass=>{let image=c;if(pass.name!=='original'){image=document.createElement('canvas');image.width=c.width;image.height=c.height;const imageContext=image.getContext('2d'),enhanced=imageContext.createImageData(c.width,c.height);enhanced.data.set(enhanceFramePixels(pixels.data,pass.name==='threshold'));imageContext.putImageData(enhanced,0,0);}await w.setParameters({tessedit_pageseg_mode:pass.mode,tessedit_char_whitelist:''});return w.recognize(image,{},{text:true,tsv:true});}
+  });
+  lastAutoDetection={attempts:detection.attempts,missing:detection.missing};
+  const found=detection.regions;debugCapture({detected:found,confidence:detection.confidence});
+  if(detection.cancelled){status('Capture changed while detecting. Run Auto Select again on the current frame.',true);return;}
   if(!stream)return;
   if(background&&(!found.total||!found.items||!found.balance)){stop('Could not relocate all store evidence areas. Review Auto Select before restarting.');return;}
   if(background&&regions.chat&&regions.sale&&found.sale&&['x','y','w','h'].some(k=>Math.abs(regions.sale[k]-found.sale[k])>5)){stop('Store layout moved. Reselect shop chat before restarting to avoid sending the wrong area.');return;}
@@ -172,7 +180,7 @@ async function autoDetect(background=false){
   if(background){status(found.total?'Your windows moved. Areas re-detected automatically; still watching.':'Your windows moved and the Sales total could not be found again. Keep Sold Items visible or select it manually.',!found.total);return;}
   if(regions.total&&regions.items)await reading();else if(regions.balance)await readBalance(w);
   const missing=[];if(!found.total||!found.items)missing.push('Sold Items / Total Sales');if(!found.balance)missing.push('personal mesos');
-  status(missing.length?'Auto-detection could not confidently locate '+missing.join(' and ')+'. Use the manual selection buttons for those areas.':'Found Sold Items, Total Sales, and your personal mesos. Check the highlighted areas before starting.'+(found.totalEstimated?' The Total Sales number was hard to read, so its area is an estimate: make sure the highlight covers the number.':''),missing.length>0);
+  status(missing.length?'Auto-detection could not confidently locate '+missing.join(' and ')+' after alternate OCR passes. Keep both panels unobstructed and try Auto Select again; missing regions remain unselected.':'Found Sold Items, Total Sales, and your personal mesos. Check the highlighted areas before starting.'+(found.totalEstimated?' The Total Sales number was hard to read, so its area is an estimate: make sure the highlight covers the number.':''),missing.length>0);
  }catch(e){debugCapture({failure:e.message});status('Auto-detection unavailable: '+e.message+' You can select the areas manually.',true);}
  finally{busy=false;checking=false;controls();}
 }

@@ -1,6 +1,6 @@
 // Reads a player shop from full-frame OCR words (tsvWords): item-name rows above "1 for 24,679 mesos" rows, the shop's title,
 // the FM map when visible, and stats from a hovered item's tooltip.
-import {rowsOf} from './locate.mjs?v=autoselect-3';
+import {rowsOf} from './locate.mjs?v=autoselect-4';
 const PRICE=/^(\d{1,4})\s*f[o0]r\s*([\d][\d,.]*)\s*m[e3][s5][o0][s5]?[^A-Za-z0-9]*$/i;
 // In full-frame OCR the small "1 for" often comes out as "ar"/"or" or vanishes: such rows are kept as unconfirmed and re-read.
 const LOOSE=/^(?:[^\d\s]{1,3}\s+)?([\d][\d,.]{2,})\s*m[e3][s5][o0][s5]?[^A-Za-z0-9]*$/i;
