@@ -13,15 +13,22 @@ function route(){
  const raw=location.hash.replace(/^#/,''),[path,query='']=raw.split('?'),[head,arg]=path.split('/');
  const view=VIEWS.includes(head)?head:LEGACY[head]||'checker',param=head==='item'?arg:view==='history'?arg:null;
  for(const v of document.querySelectorAll('.view'))v.hidden=v.dataset.view!==view;
- for(const a of document.querySelectorAll('#nav a'))a.toggleAttribute('aria-current',a.dataset.view===view);
+ // Sub-links (e.g. Discord Integration inside My Store) are current only when their anchor is the one routed to.
+ const links=[...document.querySelectorAll('#nav a')],subMatch=links.some(a=>a.dataset.view===view&&a.dataset.sub&&a.dataset.sub===arg);
+ for(const a of links)a.toggleAttribute('aria-current',a.dataset.view===view&&(subMatch?a.dataset.sub===arg:!a.dataset.sub));
  document.body.dataset.view=view;$('community-status').textContent='';window.dispatchEvent(new CustomEvent('mesoswatch:view',{detail:{view,param:arg}}));
  if(view!=='checker')document.title=document.querySelector(`#nav a[data-view="${view}"]`)?.textContent.trim()+' · Mesos-Watch';
+ const anchor=arg&&!param&&document.getElementById(arg);
  show(view,param).catch(()=>{});
  if(view==='megaphones')loadMegaphoneView(new URLSearchParams(query));
  if(view==='settings')loadSettings();
- if(!param)window.scrollTo({top:0});
+ if(anchor){anchor.closest('details')?.setAttribute('open','');if(anchor.tagName==='DETAILS')anchor.open=true;setTimeout(()=>anchor.scrollIntoView({block:'start',behavior:'smooth'}),view==='settings'?400:0);}
+ else if(!param)window.scrollTo({top:0});
 }
 window.addEventListener('hashchange',route);
+// Narrow screens: the section menu folds away so the search stays near the top.
+$('nav-toggle').onclick=()=>{const open=$('nav').classList.toggle('open');$('nav-toggle').setAttribute('aria-expanded',String(open));};
+window.addEventListener('hashchange',()=>{$('nav').classList.remove('open');$('nav-toggle').setAttribute('aria-expanded','false');});
 
 // ---- World ----
 const ws=worlds(),sel=$('world');
@@ -85,11 +92,15 @@ $('mg-form').onsubmit=async e=>{e.preventDefault();const r=checkMegaphone({messa
  try{const out=await startCheckout({message:r.message,sender:r.sender,world:sel.value,plan_id:chosen});location.href=out.url;}
  catch(e){note(e.message,'error');preview();}};
 
+// Admin links appear only for a signed-in admin. The server enforces every admin action regardless.
+function showAdminNav(on){for(const g of document.querySelectorAll('#nav .admin-only'))g.hidden=!on;}
+adminState().then(s=>showAdminNav(!!s?.admin)).catch(()=>{});
+
 // ---- Settings ----
 async function loadSettings(){
  const s=await adminState().catch(()=>({email:null,admin:false}));
  $('adm-state').textContent=s.email?(s.admin?`Signed in as ${s.email} (admin).`:`Signed in as ${s.email}, which is not an admin account.`):'Not signed in. Only site admins need this.';
- $('adm-out').hidden=!s.email;$('adm-login').hidden=!!s.email;$('adm-panel').hidden=!s.admin;
+ showAdminNav(s.admin);$('adm-out').hidden=!s.email;$('adm-login').hidden=!!s.email;$('adm-panel').hidden=!s.admin;
  if(s.admin){loadQueue();loadItems();loadSync();}
 }
 const SYNC_LABEL={requested:'Downloading…',applied:'Updated',unchanged:'No changes',failed:'Failed'};

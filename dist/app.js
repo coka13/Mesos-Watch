@@ -21,7 +21,7 @@ function debugCapture(data){$('capture-debug').textContent=JSON.stringify({sourc
 let lastChat=null,lastReads={},debugOverlay=false;
 {const t=document.createElement('label');t.className='check';t.innerHTML='<input type="checkbox" id="debug-overlay"> Show coordinates, OCR results and confidence on the preview';debugBox.querySelector('p').after(t);$('debug-overlay').onchange=e=>{debugOverlay=e.target.checked;};}
 // Store name and listed prices stay in this browser. Listed prices let a sale be verified to the exact meso.
-for(const id of ['store-name','listed-prices']){const key='mw-'+id;try{$(id).value=localStorage.getItem(key)||'';}catch{}$(id).addEventListener('change',()=>{try{localStorage.setItem(key,$(id).value.slice(0,20000));}catch{}});}
+for(const id of ['mystore-name','listed-prices']){const key='mw-'+id;try{$(id).value=localStorage.getItem(key)||'';}catch{}$(id).addEventListener('change',()=>{try{localStorage.setItem(key,$(id).value.slice(0,20000));}catch{}});}
 // Shop chat is read with every check when its area is known: buyers entering the shop corroborate a sale.
 async function readChat(w){
  if(!regions.chat)return[];
@@ -44,7 +44,7 @@ async function recordVerified(result,r){
   sales.unshift(entry);renderSales();
   if($('share-sales')?.checked&&boardConfigured()&&sale.qty>0&&!sale.unitPriceRange)reportObservations([{kind:'sale',item:entry.names,price:sale.unitPrice,qty:sale.qty}],{world:$('world')?.value||''}).then(n=>{if(n?.length){entry.shared='Shared to price board';renderSales();}}).catch(()=>{});
   if($('webhook').value.trim()){
-   try{await sendEmbed(saleEmbed({...sale,name:entry.names,icon:entry.icon,store:$('store-name').value.trim(),time:entry.time}),r.picture);entry.delivery='Sent to Discord';}
+   try{await sendEmbed(saleEmbed({...sale,name:entry.names,icon:entry.icon,store:$('mystore-name').value.trim(),time:entry.time}),r.picture);entry.delivery='Sent to Discord';}
    catch(e){entry.delivery='Discord delivery failed — not retried';status('Sale recorded, but Discord delivery failed: '+e.message,true);}
    renderSales();
   }

@@ -7,7 +7,7 @@ const message=(text,error=false)=>{$('community-status').textContent=text;$('com
 const run=fn=>async e=>{e?.preventDefault();try{await fn();}catch(err){message(err.message,true);}};
 const link=item=>el('a',{className:'item-link',href:'#item/'+item.id},iconEl(item,28),el('span',{textContent:item.name}));
 async function requireAccount(){if(!configured())throw Error('Price database not connected.');const user=await account();if(!user)throw Error('Sign in by email under Player Stores to use account features.');return user;}
-async function watchItem(item){await requireAccount();await result((await client()).from('watchlist').upsert({item_id:item.id,world:world(),stats:{}},{onConflict:'owner,item_id,world,stats',ignoreDuplicates:true}));message(item.name+' added to your watchlist. Alerts use the selected world and exact captured stats.');}
+async function watchItem(item){await requireAccount();await result((await client()).from('watchlist').upsert({item_id:item.id,world:world(),stats:{}},{onConflict:'owner,item_id,world,stats',ignoreDuplicates:true}));window.dispatchEvent(new CustomEvent('mesoswatch:watched',{detail:item}));message(item.name+' added to your watchlist. Alerts use the selected world and exact captured stats.');}
 window.addEventListener('mesoswatch:item',e=>{const item=e.detail;const button=el('button',{textContent:'Watch item',onclick:run(()=>watchItem(item))});$('ip-links').append(button);});
 async function loadWatchlist(){
  await requireAccount();const sb=await client(),rows=await result(sb.from('watchlist').select('*,item:items(*)').order('created_at',{ascending:false}));

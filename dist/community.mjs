@@ -8,11 +8,12 @@ const note=(text,error=false)=>{$('community-status').textContent=text;$('commun
 const run=fn=>async e=>{e?.preventDefault();try{await fn(e);}catch(err){note(err.message,true);}};
 const link=item=>el('a',{href:'#item/'+item.id,className:'item-link'},iconEl(item,28),el('span',{textContent:item.name}));
 let stores=[],storeId=null,listingId=null,selected=null,listingItems=new Map();
-async function loadStores(){
+async function loadStores(param){
  if(!configured())throw Error('Connect the price database before publishing stores.');
  const user=await api.account();$('player-login').hidden=!!user;$('player-account').textContent=user?'Signed in as '+user.email:'Sign in by email to manage a public store.';$('store-editor').hidden=!user;
  const all=await api.publicStores(world());
  $('public-stores').replaceChildren(...(all.length?all.map(s=>{const a=el('a',{href:'#stores/'+s.id,textContent:s.name});a.onclick=run(()=>openPublicStore(s));return el('li',{},a,el('span',{textContent:s.character_name+' · '+s.world+' · Ch '+s.channel+' FM '+s.room}),el('small',{textContent:'Updated '+ago(s.updated_at)}));}):[el('li',{className:'empty',textContent:'No active player stores yet.'})]));
+ const linked=param&&all.find(s=>String(s.id)===String(param));if(linked)await openPublicStore(linked);
  stores=user?await api.ownStores():[];$('owned-store').replaceChildren(new Option('Create a store',''),...stores.map(s=>new Option(s.name,s.id)));
  if(storeId&&stores.some(s=>s.id===storeId)){$('owned-store').value=storeId;await editStore();}
  const routeId=location.hash.split('/')[1];if(routeId){const s=all.find(s=>s.id===routeId);if(s)await openPublicStore(s);else{const sb=await client();const [found]=await api.result(sb.from('public_player_stores').select('*').eq('id',routeId).limit(1));if(found)await openPublicStore(found);}}
@@ -45,7 +46,7 @@ function trade(){try{const r=calculateTrade({buy:Number($('trade-buy').value),se
 $('trade-form').oninput=trade;$('trade-form').onsubmit=e=>e.preventDefault();trade();
 $('trade-compare').onclick=run(async()=>{const rows=await searchItems($('trade-item').value.trim(),world(),10);$('trade-market').replaceChildren(...rows.map(r=>el('li',{},link(r),el('button',{textContent:'Compare',onclick:run(async()=>{const s=await itemSummary(r.id,world());$('trade-market-note').textContent=s.median_ask_7d?'7-day asking median '+Number(s.median_ask_7d).toLocaleString()+' mesos · last seen '+ago(s.last_seen)+' · variants may differ.':'No market data available yet';})}))));});
 async function loadOpportunities(){const rows=await api.opportunities(world());$('market-opportunities').replaceChildren(...(rows.length?rows.map(r=>el('li',{},link({id:r.item_id,...r}),el('span',{textContent:statText(r.stats)}),mesoAmt(Number(r.lowest).toLocaleString()),document.createTextNode(' to '),mesoAmt(Number(r.highest).toLocaleString()),el('small',{textContent:r.shops+' shops · last seen '+ago(r.last_seen)+' · captured stats match; full variant and availability unconfirmed'}))):[el('li',{className:'empty',textContent:'No comparable recent observations. Requires matching captured stats in at least two shops within one hour.'})]));}
-window.addEventListener('mesoswatch:view',e=>{if(['stores','opportunities'].includes(e.detail.view))run(e.detail.view==='stores'?loadStores:loadOpportunities)();});
+window.addEventListener('mesoswatch:view',e=>{if(['stores','opportunities'].includes(e.detail.view))run(e.detail.view==='stores'?()=>loadStores(e.detail.param):loadOpportunities)();});
 window.addEventListener('mesoswatch:account',()=>run(loadStores)());
 if(document.body.dataset.view==='stores')run(loadStores)();
 if(document.body.dataset.view==='opportunities')run(loadOpportunities)();

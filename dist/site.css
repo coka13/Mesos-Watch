@@ -200,3 +200,48 @@ body>header,body>main,body>footer{min-width:0}
 .sale-row.verified{border-left:4px solid var(--grass,#5a9b3c)}
 .sale-row.uncertain{border-left:4px dashed #c9a14a;opacity:.92}
 .sale-row strong .item-icon{width:28px;height:28px;vertical-align:middle;margin-right:6px;image-rendering:pixelated}
+
+/* ---- Grouped navigation ---- */
+#nav{gap:10px 16px;align-items:flex-end}
+.nav-group{display:flex;flex-wrap:wrap;gap:5px;align-items:flex-end;position:relative;padding-top:15px}
+.nav-group[hidden]{display:none}
+.nav-label{position:absolute;top:0;left:3px;font:700 10px/1 var(--display,sans-serif);letter-spacing:.9px;text-transform:uppercase;color:var(--wood-dark,#5b3a1a);opacity:.75}
+.admin-only a{filter:saturate(.6)}
+@media(max-width:700px){#nav{gap:6px 10px}.nav-group{padding-top:13px}}
+
+/* ---- Home: scanner access, statistics ---- */
+.scanner-cta p{margin:0 0 12px}
+.scanner-cta a.button{display:inline-block;padding:9px 16px;border-radius:8px;font-weight:700;text-decoration:none}
+.home-stats-panel .kpis{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+
+/* ---- Hero parade: original pixel-art friends and floating mesos ---- */
+.mob-parade{position:relative;height:48px;margin:-4px 0 6px;pointer-events:none;overflow:hidden;container-type:inline-size;contain:layout paint}
+.mob{position:absolute;bottom:0;left:0;animation:mob-walk var(--d,30s) linear var(--delay,0s) infinite;will-change:transform}
+.mob img{display:block;image-rendering:pixelated;height:auto;animation:mob-hop .7s steps(2,jump-none) infinite;filter:drop-shadow(0 2px 0 rgba(58,35,18,.25))}
+@keyframes mob-walk{0%{transform:translateX(-60px) scaleX(-1)}49.99%{transform:translateX(calc(100cqw + 10px)) scaleX(-1)}50%{transform:translateX(calc(100cqw + 10px)) scaleX(1)}100%{transform:translateX(-60px) scaleX(1)}}
+@keyframes mob-hop{0%{transform:translateY(0)}100%{transform:translateY(-3px)}}
+.float-meso{position:absolute;width:16px;height:16px;background:url(meso.png?v=ms-2) center/contain no-repeat;opacity:0;animation:meso-float 7s ease-in-out infinite}
+.float-meso.f1{left:14%;animation-delay:-1s}.float-meso.f2{left:52%;animation-delay:-3.5s}.float-meso.f3{left:83%;animation-delay:-5.5s}
+@keyframes meso-float{0%{transform:translateY(46px) rotate(0);opacity:0}20%{opacity:.9}80%{opacity:.9}100%{transform:translateY(-8px) rotate(25deg);opacity:0}}
+.mob-parade.offscreen *,.page-hidden .mob-parade *{animation-play-state:paused}
+
+/* ---- Themed empty states ---- */
+.price-feed li.empty:not(.error)::before,.admin-list li.empty:not(.error)::before,p.empty:not(.error)::before{content:"";display:inline-block;width:30px;height:24px;margin-right:8px;vertical-align:middle;background:url(sprites/slime.svg) center/contain no-repeat;image-rendering:pixelated}
+
+/* ---- Interaction feedback ---- */
+#trade-output.sparkle{animation:meso-sparkle .9s ease-out}
+@keyframes meso-sparkle{0%{box-shadow:0 0 0 0 rgba(255,214,90,.9);background-color:#fff6cf}100%{box-shadow:0 0 0 14px rgba(255,214,90,0);background-color:transparent}}
+.mega-text.enter{animation:mega-in .45s ease-out}
+@keyframes mega-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.watch-pop{position:fixed;right:18px;bottom:18px;z-index:90;display:flex;align-items:center;gap:8px;padding:8px 14px 8px 8px;border-radius:12px;background:var(--cream,#fff8e2);border:2px solid var(--wood-dark,#5b3a1a);font-weight:700;box-shadow:0 4px 0 rgba(58,35,18,.3);animation:watch-pop 2.6s ease-out forwards}
+.watch-pop img{image-rendering:pixelated;animation:mob-hop .35s steps(2,jump-none) 4}
+@keyframes watch-pop{0%{opacity:0;transform:translateY(20px) scale(.9)}12%{opacity:1;transform:none}85%{opacity:1}100%{opacity:0;transform:translateY(-8px)}}
+
+@media(prefers-reduced-motion:reduce){
+ .mob{animation:none;transform:translateX(calc(var(--rest,50) * 1cqw))}.mob img,.watch-pop img{animation:none}
+ .float-meso{display:none}#trade-output.sparkle,.mega-text.enter,.watch-pop{animation:none}
+}
+
+/* ---- Collapsible menu on narrow screens ---- */
+.nav-toggle{display:none;margin-left:auto}
+@media(max-width:700px){.nav-toggle{display:inline-block}#nav{display:none;width:100%}#nav.open{display:flex}}
