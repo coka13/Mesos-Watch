@@ -3,11 +3,12 @@ import {detectStoreRegions,enhanceFramePixels,storeRegionsReady} from './auto-se
 import {deliverDiscord} from './discord-delivery.mjs';
 import {sourcePoint,validRegion} from './capture-geometry.mjs';
 import {observeChat} from './chat.mjs?v=reader-4';
-import {discordBody} from './notifications.mjs?v=reader-5';
-import {createSession,observeStore} from './store-session.mjs?v=phase3-1';
+import {discordBody,saleEmbed} from './notifications.mjs?v=ms-4';
+import {createSession,observeStore} from './store-session.mjs?v=ms-4';
+import {chooseSoldReading,chatVisitors,parsePriceList,agreedNumber,STORE_FEE_RATE} from './sold-items.mjs?v=ms-4';
 import {parseTotal,chooseItemReading} from './detection.mjs?v=reader-4';
 import {tsvWords,locateRegions,frameScale,coinScorer} from './locate.mjs?v=autoselect-4';
-import {reportObservations,configured as boardConfigured} from './api.mjs?v=ms-2';
+import {reportObservations,configured as boardConfigured,matchNames,iconUrl} from './api.mjs?v=ms-2';
 const $=id=>document.getElementById(id);
 const video=$('video'),preview=$('preview'),ctx=preview.getContext('2d');
 let stream=null,regions={},mode=null,drag=null,timer=null,watching=false,busy=false,worker=null,workerPromise=null,state=createSession(crypto.randomUUID()),sales=[],frame=null,checking=false;
@@ -16,6 +17,41 @@ const fmt=n=>n.toLocaleString('en-US');
 const debugBox=document.createElement('details');debugBox.className='privacy';debugBox.innerHTML='<summary>Local capture diagnostics</summary><p>Coordinates and OCR from your selected store regions stay on this page. Do not share diagnostics containing private chat.</p><pre id="capture-debug"></pre>';preview.parentElement.after(debugBox);
 let lastAutoDetection={};
 function debugCapture(data){$('capture-debug').textContent=JSON.stringify({source:{width:video.videoWidth,height:video.videoHeight},regions,...lastAutoDetection,...data},null,2);}
+// Debug overlay: region coordinates and the latest OCR result per region, drawn over the preview.
+let lastChat=null,lastReads={},debugOverlay=false;
+{const t=document.createElement('label');t.className='check';t.innerHTML='<input type="checkbox" id="debug-overlay"> Show coordinates, OCR results and confidence on the preview';debugBox.querySelector('p').after(t);$('debug-overlay').onchange=e=>{debugOverlay=e.target.checked;};}
+// Store name and listed prices stay in this browser. Listed prices let a sale be verified to the exact meso.
+for(const id of ['store-name','listed-prices']){const key='mw-'+id;try{$(id).value=localStorage.getItem(key)||'';}catch{}$(id).addEventListener('change',()=>{try{localStorage.setItem(key,$(id).value.slice(0,20000));}catch{}});}
+// Shop chat is read with every check when its area is known: buyers entering the shop corroborate a sale.
+async function readChat(w){
+ if(!regions.chat)return[];
+ await w.setParameters({tessedit_pageseg_mode:'6',tessedit_char_whitelist:''});
+ const read=await w.recognize(prepare(crop('chat',4)));
+ lastChat={text:read.data.text,confidence:read.data.confidence,picture:crop('chat')};
+ const visitors=read.data.confidence>=50?chatVisitors(read.data.text):[];
+ lastReads.chat=visitors.length+' visitor(s) · '+Math.round(read.data.confidence)+'%';
+ return visitors;
+}
+// Verified sales only: one entry per Sold Items record, never repeated for the same record in this session.
+async function recordVerified(result,r){
+ const occurrences=new Map();
+ for(const sale of result.sales){
+  const base=[state.id,sale.name,sale.buyer,sale.qty].join('|').toLowerCase(),n=(occurrences.get(base)||0)+1;occurrences.set(base,n);
+  const saleKey=base+'|'+(sales.filter(e=>e.saleKey?.startsWith(base+'|')).length+n);
+  if(notified.has(saleKey))continue;notified.add(saleKey);
+  let item=null;try{const [m]=await matchNames([sale.name.replace(/\.{2,}$/,'')]);if(m?.item_id)item={id:m.item_id,game_id:m.game_id,category:m.category,icon_path:m.icon_path,name:m.name};}catch{}
+  const entry={time:new Date().toISOString(),sessionId:state.id,initialBalance:state.initialBalance,kind:'verified',saleKey,names:item?.name||sale.name,qty:sale.qty,buyer:sale.buyer,unitPrice:sale.unitPrice,amount:sale.gross,net:sale.net,fee:sale.fee,method:result.method,icon:item?iconUrl(item):null,corroborated:true,evidence:result.reason,delivery:$('webhook').value.trim()?'Sending':'Recorded (Discord not connected)'};
+  sales.unshift(entry);renderSales();
+  if($('share-sales')?.checked&&boardConfigured()&&sale.qty>0&&!sale.unitPriceRange)reportObservations([{kind:'sale',item:entry.names,price:sale.unitPrice,qty:sale.qty}],{world:$('world')?.value||''}).then(n=>{if(n?.length){entry.shared='Shared to price board';renderSales();}}).catch(()=>{});
+  if($('webhook').value.trim()){
+   try{await sendEmbed(saleEmbed({...sale,name:entry.names,icon:entry.icon,store:$('store-name').value.trim(),time:entry.time}),r.picture);entry.delivery='Sent to Discord';}
+   catch(e){entry.delivery='Discord delivery failed — not retried';status('Sale recorded, but Discord delivery failed: '+e.message,true);}
+   renderSales();
+  }
+ }
+ status('Verified sale recorded: '+result.sales.map(x=>x.name+' ×'+x.qty).join(', ')+'. Still watching your store.');
+}
+async function sendEmbed(embed,picture){const url=validWebhook();const blob=picture?await new Promise(res=>picture.toBlob(b=>res(b),'image/png')):null;await deliverDiscord(url,discordBody('',blob,'sold-items.png',[embed]));}
 video.addEventListener('resize',()=>{if(!stream)return;stop('Capture resolution changed. Re-detecting regions; review them before restarting.');regions={};layoutSig=null;debugCapture({failure:'Source resolution changed'});if(!busy&&!checking)autoDetect();});
 const baselineNote=document.createElement('p');baselineNote.className='hint';baselineNote.id='session-baseline';baselineNote.textContent='Session starting mesos: not set';$('balance-note').after(baselineNote);
 const meso=(size=14)=>{const s=document.createElement('span');s.className='meso';s.style.setProperty('--m',size+'px');s.title='mesos';const i=document.createElement('img');i.src='meso.png?v=ms-2';i.alt='';i.width=i.height=size;i.decoding='async';s.append(i);return s;};
@@ -41,7 +77,7 @@ $('test').onclick=async()=>{try{$('test').disabled=true;await send('Mesos-Watch 
 function stop(message='Watching stopped. Restart to establish a fresh baseline.') {watching=false;clearTimeout(timer);timer=null;$('badge').classList.remove('live');$('badge').replaceChildren(Object.assign(document.createElement('span'),{className:'dot'}),document.createTextNode(' Not watching'));controls();status(message);}
 $('stop').onclick=()=>stop();
 $('connect').onclick=async()=>{try{if(!navigator.mediaDevices?.getDisplayMedia)throw Error('Screen sharing isn’t available here. Open this page in desktop Chrome or Edge.');if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}stream=await navigator.mediaDevices.getDisplayMedia({video:{frameRate:2},audio:false});video.srcObject=stream;await video.play();regions={};mode=null;stream.getVideoTracks()[0].addEventListener('ended',()=>{stop('Game sharing ended. Reconnect your window to continue.');stream=null;video.srcObject=null;regions={};$('preview').hidden=true;$('capture-empty').hidden=false;controls();window.dispatchEvent(new Event('mesoswatch:capture-ended'));});$('preview').hidden=false;$('capture-empty').hidden=true;$('source-note').textContent='Window connected';window.dispatchEvent(new Event('mesoswatch:capture-started'));cancelAnimationFrame(frame);controls();draw();await autoDetect();}catch(e){status(e.name==='NotAllowedError'?'Window sharing was cancelled. You can try again.':e.message,true);controls();}};
-function draw(){if(!stream)return;const w=video.videoWidth,h=video.videoHeight;if(w&&h&&document.body.dataset.view==='store'&&!document.hidden&&$('capture-details').open){preview.width=w;preview.height=h;ctx.drawImage(video,0,0);for(const [name,r]of Object.entries(regions)){ctx.strokeStyle=name==='chat'?'#c58be5':name==='sale'?'#e58a81':name==='balance'?'#7ba952':name==='total'?'#e8a53b':'#6aa8d1';ctx.lineWidth=Math.max(2,w/400);ctx.strokeRect(r.x,r.y,r.w,r.h);ctx.fillStyle=ctx.strokeStyle;ctx.font=`${Math.max(12,w/100)}px sans-serif`;ctx.fillText(name==='chat'?'SHOP CHAT':name==='sale'?'SALE SNAPSHOT':name==='balance'?'MY MESOS':name==='total'?'TOTAL':'SOLD ITEMS',r.x+4,Math.max(15,r.y-5));}if(drag){ctx.strokeStyle='#fff';ctx.lineWidth=3;ctx.strokeRect(drag.x,drag.y,drag.endX-drag.x,drag.endY-drag.y);}}frame=requestAnimationFrame(draw);}
+function draw(){if(!stream)return;const w=video.videoWidth,h=video.videoHeight;if(w&&h&&document.body.dataset.view==='store'&&!document.hidden&&$('capture-details').open){preview.width=w;preview.height=h;ctx.drawImage(video,0,0);for(const [name,r]of Object.entries(regions)){if(typeof r!=='object'||!Number.isFinite(r?.x))continue;ctx.strokeStyle=name==='chat'?'#c58be5':name==='sale'?'#e58a81':name==='balance'?'#7ba952':name==='total'?'#e8a53b':'#6aa8d1';ctx.lineWidth=Math.max(2,w/400);ctx.strokeRect(r.x,r.y,r.w,r.h);ctx.fillStyle=ctx.strokeStyle;ctx.font=`${Math.max(12,w/100)}px sans-serif`;if(typeof r!=='object'||!Number.isFinite(r?.x))continue;ctx.fillText((name==='chat'?'SHOP CHAT':name==='sale'?'SALE SNAPSHOT':name==='balance'?'MY MESOS':name==='total'?'TOTAL':'SOLD ITEMS')+(debugOverlay?` ${r.x},${r.y} ${r.w}×${r.h}`+(lastReads[name]?' · '+lastReads[name]:''):''),r.x+4,Math.max(15,r.y-5));}if(drag){ctx.strokeStyle='#fff';ctx.lineWidth=3;ctx.strokeRect(drag.x,drag.y,drag.endX-drag.x,drag.endY-drag.y);}}frame=requestAnimationFrame(draw);}
 function point(e){const b=preview.getBoundingClientRect();return sourcePoint({x:e.clientX,y:e.clientY},{x:b.left,y:b.top,width:b.width,height:b.height},{width:preview.width,height:preview.height});}
 function selectRegion(name){
  mode=name;$('capture-details').open=true;$('capture-details').parentElement.closest('details').open=true;
@@ -75,8 +111,20 @@ async function reading(){
  if(regions.total){const totalImage=crop('total',4);showCrop('total-crop',crop('total',2));await w.setParameters({tessedit_pageseg_mode:'7',tessedit_char_whitelist:'0123456789, .'});t=await w.recognize(prepare(totalImage));t2=await w.recognize(prepare(totalImage,true));a=parseTotal(t.data.text);b=parseTotal(t2.data.text);total=a!==null&&a===b?a:null;}
  await w.setParameters({tessedit_pageseg_mode:'6',tessedit_char_whitelist:''});
  const i=await w.recognize(prepare(itemsImage)),i2=await w.recognize(prepare(itemsImage,true));
+ const balance=await readBalance(w),visitors=await readChat(w);
+ if(regions.mode==='sold-items'){
+  const sold=chooseSoldReading(i.data,i2.data);lastReads.items=sold.records.length+' records · '+Math.round(sold.confidence)+'%';
+  $('total-reading').textContent='Not shown in this layout';
+  $('items-reading').textContent=sold.display||'No Sold Items records found';
+  $('items-reading').classList.toggle('uncertain',!sold.complete);
+  $('item-quality').textContent=sold.complete?'Both readings agree on every record.':'Records the two readings disagree on are shown, but they cannot verify a sale.';
+  $('item-quality').classList.toggle('uncertain',!sold.complete);
+  $('raw-ocr').textContent='Sold Items pass 1:\n'+i.data.text.trim()+'\n\nSold Items pass 2:\n'+i2.data.text.trim()+(lastChat?'\n\nShop chat:\n'+lastChat.text.trim():'');
+  $('ocr-quality').textContent='Sold Items confidence: '+Math.round(sold.confidence)+'% · '+(regions.chat?visitors.length+' visitor name(s) in chat':'shop chat not selected');
+  debugCapture({balance,records:sold.records,visitors,confidence:sold.confidence});
+  return{mode:'sold-items',balance,records:sold.records,confidence:sold.confidence,visitors,prices:parsePriceList($('listed-prices').value),feeRate:STORE_FEE_RATE,picture,raw:i.data.text+'\n'+i2.data.text};
+ }
  const chosen=chooseItemReading(i.data,i2.data);
- const balance=await readBalance(w);
  $('total-reading').textContent=regions.mode==='sold-items'?'Not shown in this layout':total===null?'Reselect total':fmt(total)+' mesos';
  $('items-reading').textContent=chosen.display||'No item names found — select the names only';
  $('items-reading').classList.toggle('uncertain',!chosen.itemReliable);
@@ -98,6 +146,12 @@ async function tick(){
   state=result.state;
   baselineNote.textContent=state.initialBalance===null?'Session starting mesos: not set':'Session starting mesos: '+fmt(state.initialBalance)+' · current change: '+(r.balance===null?'unreadable':fmt(r.balance-state.initialBalance))+' mesos';
   if(result.kind==='unreadable')status('Sales total unclear. No sale alert sent; checking again next time.',true);
+  else if(result.kind==='uncertain'||result.kind==='balance-change'){
+   const names=result.kind==='balance-change'?'Mesos changed with no new Sold Items record':(result.records||[]).map(x=>x.name+' ×'+x.qty).join(', ')||'Sold Items changed';
+   sales.unshift({time:new Date().toISOString(),sessionId:state.id,initialBalance:state.initialBalance,kind:result.kind,names,amount:null,balanceChange:result.balanceChange,corroborated:false,evidence:result.reason,delivery:result.kind==='balance-change'?'Not a sale · kept for your balance timeline':'Uncertain · no Discord alert or market contribution'});
+   renderSales();status(result.reason);
+  }
+  else if(result.kind==='sale'&&result.sales)await recordVerified(result,r);
   else if(result.kind==='unverified'){
    sales.unshift({time:new Date().toISOString(),sessionId:state.id,initialBalance:state.initialBalance,kind:'unverified',names:result.names.length?result.names.join(', '):'Sold Items changed',amount:null,balanceChange:result.balanceChange,corroborated:false,evidence:result.reason,delivery:'Unverified change · no sale notification or market contribution'});renderSales();status(result.reason);
   }
@@ -122,9 +176,10 @@ async function tick(){
 }
 async function checkChat(){
  if(!regions.chat)return;
- const picture=crop('chat'),image=crop('chat',4),w=await getWorker();
- await w.setParameters({tessedit_pageseg_mode:'6',tessedit_char_whitelist:''});
- const text=await w.recognize(prepare(image));if(!watching)return;
+ let picture,text;
+ if(lastChat){picture=lastChat.picture;text={data:lastChat};lastChat=null;}
+ else{picture=crop('chat');const w=await getWorker();await w.setParameters({tessedit_pageseg_mode:'6',tessedit_char_whitelist:''});text=await w.recognize(prepare(crop('chat',4)));}
+ if(!watching)return;
  const result=observeChat(chatState,{text:text.data.text,confidence:text.data.confidence});chatState=result.state;
  if(result.kind==='messages'){
   const lines=result.messages.map(m=>m.user+': '+m.text).join('\n');
@@ -137,7 +192,8 @@ async function checkChat(){
 }
 
 $('start').onclick=async()=>{try{if($('webhook').value.trim())validWebhook();if(!storeRegionsReady(regions))throw Error('Keep Sold Items and personal mesos visible, then run Auto Select. Select Total Sales too only if this layout shows it.');if($('chat-alerts').checked&&$('webhook').value.trim()&&!regions.chat){selectRegion('chat');throw Error('Select the shop-chat area once before starting message alerts.');}chatState={ready:false,keys:[],candidate:null};$('capture-details').open=false;$('crop-details').open=false;state=createSession(crypto.randomUUID());baselineNote.textContent='Session starting mesos: waiting for a reliable reading';watching=true;mode=null;drag=null;$('badge').classList.add('live');$('badge').replaceChildren(Object.assign(document.createElement('span'),{className:'dot'}),document.createTextNode(' Watching'));controls();await tick();}catch(e){stop(e.message);$('status').classList.add('error');}};
-function row(entry,example=false){const r=document.createElement('div');r.className='sale-row';const time=document.createElement('time');time.textContent=new Date(entry.time).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});const text=document.createElement('div'),name=document.createElement('strong'),note=document.createElement('small');name.textContent=entry.names;note.textContent=example?'Example only · no Discord message sent':entry.delivery+' · OCR reading';text.append(name,note);const amount=document.createElement('div');amount.className='amount';amount.replaceChildren(mesoAmt(entry.kind==='unverified'?(entry.balanceChange>=0?'+':'')+fmt(entry.balanceChange)+' mesos balance change':'+'+fmt(entry.amount)+' mesos',13));r.append(time,text,amount);return r;}
+const isChange=e=>['unverified','uncertain','balance-change'].includes(e.kind);
+function row(entry,example=false){const r=document.createElement('div');r.className='sale-row'+(entry.kind==='verified'?' verified':isChange(entry)?' uncertain':'');const time=document.createElement('time');time.textContent=new Date(entry.time).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});const text=document.createElement('div'),name=document.createElement('strong'),note=document.createElement('small');if(entry.icon){const img=Object.assign(document.createElement('img'),{src:entry.icon,alt:'',width:28,height:28,loading:'lazy',className:'item-icon',onerror(){this.remove();}});name.append(img);}name.append(document.createTextNode(entry.names+(entry.qty>1?' ×'+entry.qty:'')));note.textContent=example?'Example only · no Discord message sent':entry.kind==='verified'?'Verified · '+(entry.buyer?'buyer '+entry.buyer+' · ':'')+(entry.unitPrice?fmt(entry.unitPrice)+' each · ':'')+'received '+fmt(entry.net)+' after fee · '+entry.delivery:entry.delivery+(entry.evidence&&isChange(entry)?' · '+entry.evidence:'')+' · OCR reading';text.append(name,note);const amount=document.createElement('div');amount.className='amount';amount.replaceChildren(mesoAmt(isChange(entry)?(entry.balanceChange>=0?'+':'')+fmt(entry.balanceChange)+' mesos balance change':'+'+fmt(entry.amount)+' mesos',13));r.append(time,text,amount);return r;}
 function renderSales(){try{localStorage.setItem('mw-sales',JSON.stringify(sales.slice(0,500)));}catch{}$('activity-empty').hidden=sales.length>0;$('sales').replaceChildren(...sales.map(s=>row(s)));$('sale-count').textContent=String(sales.filter(s=>s.corroborated===true).length);$('meso-count').replaceChildren(mesoAmt(fmt(sales.filter(s=>s.corroborated===true).reduce((a,s)=>a+s.amount,0)),13),document.createTextNode(' '),Object.assign(document.createElement('small'),{textContent:'mesos'}));$('export').disabled=!sales.length;}
 $('demo').onclick=()=>{if(sales.length)return;$('sales').replaceChildren(row({time:new Date().toISOString(),names:'Example: Steelies',amount:2500000},true));$('demo').textContent='Example shown below';};
 $('export').onclick=()=>{const safe=s=>{let v=String(s);if(/^[=+@\-\t\r]/.test(v))v="'"+v;return'"'+v.replaceAll('"','""')+'"';};const csv='Time,Items,Total increase (mesos),Delivery\r\n'+sales.map(s=>[s.time,s.names,s.kind==='unverified'?'':s.amount,s.delivery].map(safe).join(',')).join('\r\n');const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download='mesoswatch-sales.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
@@ -151,8 +207,8 @@ async function readBalance(w){
  showCrop('balance-crop',crop('balance',2));
  await w.setParameters({tessedit_pageseg_mode:'7',tessedit_char_whitelist:'0123456789, .'});
  let source=crop('balance',4);const ink=numericInkBounds(source.getContext('2d',{willReadFrequently:true}).getImageData(0,0,source.width,source.height),4);if(ink){const tight=document.createElement('canvas');tight.width=ink.w;tight.height=ink.h;tight.getContext('2d').drawImage(source,ink.x,ink.y,ink.w,ink.h,0,0,ink.w,ink.h);source=tight;}const a=await w.recognize(prepare(source)),b=await w.recognize(prepare(source,true));
- const first=parseTotal(a.data.text),second=parseTotal(b.data.text);
- const reliable=first!==null&&first===second&&Math.min(a.data.confidence,b.data.confidence)>=65;
+ const first=agreedNumber(a.data,b.data,parseTotal),reliable=first!==null;
+ lastReads.balance=(reliable?fmt(first):'unclear')+' · '+Math.round(Math.min(a.data.confidence,b.data.confidence))+'%';
  $('balance-reading').replaceChildren(reliable?mesoAmt(fmt(first),15):document.createTextNode('Unclear'));
  $('balance-note').textContent=reliable?'Personal mesos · checked '+new Date().toLocaleTimeString():'Balance unreadable. Keep inventory visible or reselect the digits.';
  return reliable?first:null;
@@ -205,7 +261,7 @@ window.dispatchEvent(new Event('mesoswatch:capture-ready'));
 
 // Personal sales history survives reloads (this browser only).
 const notified=new Set();
-try{const saved=JSON.parse(localStorage.getItem('mw-sales')||'[]');if(Array.isArray(saved)){sales=saved.filter(e=>e&&typeof e.time==='string'&&(Number.isFinite(e.amount)||(e.kind==='unverified'&&Number.isFinite(e.balanceChange)))).slice(0,500);renderSales();}}catch{}
+try{const saved=JSON.parse(localStorage.getItem('mw-sales')||'[]');if(Array.isArray(saved)){sales=saved.filter(e=>e&&typeof e.time==='string'&&(Number.isFinite(e.amount)||(isChange(e)&&Number.isFinite(e.balanceChange)))).slice(0,500);renderSales();}}catch{}
 window.addEventListener('mesoswatch:clear-sales',()=>{sales=[];renderSales();});
 
 // A confirmed sale goes to the price board only when the evidence is unambiguous: one item name read reliably and the
