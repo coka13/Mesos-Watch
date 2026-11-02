@@ -48,21 +48,21 @@ export function toRows(list,cash=[]){
 }
 
 const lit=v=>v==null?'null':"'"+String(v).replace(/'/g,"''")+"'";
-// Upsert by name; v83 catalog rows from an older import that are not in Classic are removed unless prices reference them.
+// Legacy insert-only SQL export: conflicting identities and existing catalog rows remain unchanged.
 export function toSql(rows){
- const values=rows.map(r=>`(${r.game_id},${lit(r.name)},${lit(r.category)},${lit(r.subcategory)},${lit(JSON.stringify(r.base_stats))}::jsonb,'catalog',${lit(r.source_url)},true)`);
+ const values=rows.map(r=>`(${r.game_id},${lit(r.name)},${lit(r.category)},${lit(r.subcategory)},${lit(JSON.stringify(r.base_stats))}::jsonb,'catalog',${lit(r.source_url)},false)`);
  return `begin;
-update public.items set game_id=null where source='catalog' and game_id is not null;
+
 insert into public.items (game_id,name,category,subcategory,base_stats,source,source_url,verified) values
 ${values.join(',\n')}
-on conflict (name_key) do update set game_id=excluded.game_id,category=excluded.category,subcategory=excluded.subcategory,base_stats=excluded.base_stats,source='catalog',source_url=excluded.source_url,verified=true;
-delete from public.items i where i.source='catalog' and i.game_id is null
-  and not exists (select 1 from public.observations o where o.item_id=i.id) and not exists (select 1 from public.icon_votes v where v.item_id=i.id);
+on conflict do nothing;
+
 commit;
 `;
 }
 
 async function main(){
+ if(process.env.CATALOG_SOURCE_APPROVED!=='true')throw Error('Set CATALOG_SOURCE_APPROVED=true only after recording source permission. No download attempted.');
  const args=process.argv.slice(2),arg=f=>args.includes(f)?args[args.indexOf(f)+1]:null,file=arg('--file'),sqlOut=arg('--sql'),dry=args.includes('--dry-run');
  const get=async u=>(await fetch(u,{headers:{'User-Agent':'MESOS-WATCH catalog import (one request per file per run)'}})).json();
  const list=file?JSON.parse(fs.readFileSync(file,'utf8')):await get(SOURCE);
@@ -72,14 +72,11 @@ async function main(){
  const rows=toRows(list,cash);
  console.log(`${list.length} items + ${cash.length} NX items from the source, ${rows.length} distinct names (${rows.filter(r=>r.category==='cash').length} NX).`);
  if(dry)return;
- if(sqlOut){fs.writeFileSync(sqlOut,toSql(rows));console.log(`Wrote ${sqlOut}. Paste it into Supabase -> SQL Editor and run it.`);return;}
+ if(sqlOut){fs.writeFileSync(sqlOut,"begin;\nselect public.catalog_apply("+lit(JSON.stringify(list))+"::jsonb,"+lit(JSON.stringify({categories:[{items:cash}]}))+"::jsonb);\ncommit;\n");console.log(`Wrote ${sqlOut}. Paste it into Supabase -> SQL Editor and run it.`);return;}
  const url=process.env.SUPABASE_URL?.replace(/\/$/,''),key=process.env.SUPABASE_SERVICE_ROLE_KEY;
  if(!url||!key)throw Error('Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (service role key: keep it off the website), or use --sql.');
- for(let i=0;i<rows.length;i+=500){
-  const r=await fetch(`${url}/rest/v1/items?on_conflict=name_key`,{method:'POST',headers:{apikey:key,Authorization:`Bearer ${key}`,'Content-Type':'application/json',Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify(rows.slice(i,i+500))});
-  if(!r.ok)throw Error(`Upsert failed at row ${i}: ${r.status} ${await r.text()}`);
-  process.stdout.write(`\r${Math.min(i+500,rows.length)} / ${rows.length}`);
- }
- console.log('\nCatalog imported.');
+ const r=await fetch(url+'/rest/v1/rpc/catalog_apply',{method:'POST',headers:{apikey:key,Authorization:'Bearer '+key,'Content-Type':'application/json'},body:JSON.stringify({p_doc:list,p_cash:{categories:[{items:cash}]}})});
+ if(!r.ok)throw Error('Review import failed: HTTP '+r.status);
+ console.log('Catalog candidates saved for admin release review; existing records preserved.');
 }
 if(import.meta.url===pathToFileURL(process.argv[1]).href)main().catch(e=>{console.error(e.message);process.exit(1);});

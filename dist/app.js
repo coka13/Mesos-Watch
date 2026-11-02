@@ -1,14 +1,21 @@
+import {detectStoreRegions,enhanceFramePixels} from './auto-select.mjs?v=autoselect-4';
+import {deliverDiscord} from './discord-delivery.mjs';
+import {sourcePoint,validRegion} from './capture-geometry.mjs';
 import {observeChat} from './chat.mjs?v=reader-4';
 import {discordBody} from './notifications.mjs?v=reader-5';
 import {createSession,observeStore} from './store-session.mjs?v=phase3-1';
 import {parseTotal,chooseItemReading} from './detection.mjs?v=reader-4';
-import {tsvWords,locateRegions,frameScale,coinScorer} from './locate.mjs?v=autoselect-3';
+import {tsvWords,locateRegions,frameScale,coinScorer} from './locate.mjs?v=autoselect-4';
 import {reportObservations,configured as boardConfigured} from './api.mjs?v=ms-2';
 const $=id=>document.getElementById(id);
 const video=$('video'),preview=$('preview'),ctx=preview.getContext('2d');
 let stream=null,regions={},mode=null,drag=null,timer=null,watching=false,busy=false,worker=null,workerPromise=null,state=createSession(crypto.randomUUID()),sales=[],frame=null,checking=false;
 let chatState={ready:false,keys:[],candidate:null},chatCount=0;
 const fmt=n=>n.toLocaleString('en-US');
+const debugBox=document.createElement('details');debugBox.className='privacy';debugBox.innerHTML='<summary>Local capture diagnostics</summary><p>Coordinates and OCR from your selected store regions stay on this page. Do not share diagnostics containing private chat.</p><pre id="capture-debug"></pre>';preview.parentElement.after(debugBox);
+let lastAutoDetection={};
+function debugCapture(data){$('capture-debug').textContent=JSON.stringify({source:{width:video.videoWidth,height:video.videoHeight},regions,...lastAutoDetection,...data},null,2);}
+video.addEventListener('resize',()=>{if(!stream)return;stop('Capture resolution changed. Re-detecting regions; review them before restarting.');regions={};layoutSig=null;debugCapture({failure:'Source resolution changed'});if(!busy&&!checking)autoDetect();});
 const baselineNote=document.createElement('p');baselineNote.className='hint';baselineNote.id='session-baseline';baselineNote.textContent='Session starting mesos: not set';$('balance-note').after(baselineNote);
 const meso=(size=14)=>{const s=document.createElement('span');s.className='meso';s.style.setProperty('--m',size+'px');s.title='mesos';const i=document.createElement('img');i.src='meso.png?v=ms-2';i.alt='';i.width=i.height=size;i.decoding='async';s.append(i);return s;};
 const mesoAmt=(text,size=14)=>{const s=document.createElement('span');s.className='meso-amt';s.append(meso(size),document.createTextNode(String(text)));return s;};
@@ -27,15 +34,14 @@ async function send(content,picture,filename='sold-items.png'){
  const url=validWebhook();
  const blob=picture?await new Promise((resolve,reject)=>picture.toBlob(b=>b?resolve(b):reject(Error('Screenshot failed.')),'image/png')):null;
  const payload=discordBody(content,blob,filename);
- const r=await fetch(url,{method:'POST',...payload,signal:AbortSignal.timeout(20000)});
- if(!r.ok)throw Error(r.status===429?'Discord rate limit reached. Wait before restarting.':`Discord returned ${r.status}. Check your webhook and channel permissions.`);
+ await deliverDiscord(url,payload);
 }
 $('test').onclick=async()=>{try{$('test').disabled=true;await send('Mesos-Watch test: your shop alerts will arrive here.');status('Test delivered to Discord. You’re connected.');$('discord-step').open=false;}catch(e){status(e.message,true);}finally{$('test').disabled=false;}};
 function stop(message='Watching stopped. Restart to establish a fresh baseline.') {watching=false;clearTimeout(timer);timer=null;$('badge').classList.remove('live');$('badge').replaceChildren(Object.assign(document.createElement('span'),{className:'dot'}),document.createTextNode(' Not watching'));controls();status(message);}
 $('stop').onclick=()=>stop();
 $('connect').onclick=async()=>{try{if(!navigator.mediaDevices?.getDisplayMedia)throw Error('Screen sharing isn’t available here. Open this page in desktop Chrome or Edge.');if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}stream=await navigator.mediaDevices.getDisplayMedia({video:{frameRate:2},audio:false});video.srcObject=stream;await video.play();regions={};mode=null;stream.getVideoTracks()[0].addEventListener('ended',()=>{stop('Game sharing ended. Reconnect your window to continue.');stream=null;video.srcObject=null;regions={};$('preview').hidden=true;$('capture-empty').hidden=false;controls();window.dispatchEvent(new Event('mesoswatch:capture-ended'));});$('preview').hidden=false;$('capture-empty').hidden=true;$('source-note').textContent='Window connected';window.dispatchEvent(new Event('mesoswatch:capture-started'));cancelAnimationFrame(frame);controls();draw();await autoDetect();}catch(e){status(e.name==='NotAllowedError'?'Window sharing was cancelled. You can try again.':e.message,true);controls();}};
-function draw(){if(!stream)return;const w=video.videoWidth,h=video.videoHeight;if(w&&h&&$('capture-details').open){preview.width=w;preview.height=h;ctx.drawImage(video,0,0);for(const [name,r]of Object.entries(regions)){ctx.strokeStyle=name==='chat'?'#c58be5':name==='sale'?'#e58a81':name==='balance'?'#7ba952':name==='total'?'#e8a53b':'#6aa8d1';ctx.lineWidth=Math.max(2,w/400);ctx.strokeRect(r.x,r.y,r.w,r.h);ctx.fillStyle=ctx.strokeStyle;ctx.font=`${Math.max(12,w/100)}px sans-serif`;ctx.fillText(name==='chat'?'SHOP CHAT':name==='sale'?'SALE SNAPSHOT':name==='balance'?'MY MESOS':name==='total'?'TOTAL':'SOLD ITEMS',r.x+4,Math.max(15,r.y-5));}if(drag){ctx.strokeStyle='#fff';ctx.lineWidth=3;ctx.strokeRect(drag.x,drag.y,drag.endX-drag.x,drag.endY-drag.y);}}frame=requestAnimationFrame(draw);}
-function point(e){const b=preview.getBoundingClientRect();return{x:Math.max(0,Math.min(preview.width,(e.clientX-b.left)*preview.width/b.width)),y:Math.max(0,Math.min(preview.height,(e.clientY-b.top)*preview.height/b.height))};}
+function draw(){if(!stream)return;const w=video.videoWidth,h=video.videoHeight;if(w&&h&&document.body.dataset.view==='store'&&!document.hidden&&$('capture-details').open){preview.width=w;preview.height=h;ctx.drawImage(video,0,0);for(const [name,r]of Object.entries(regions)){ctx.strokeStyle=name==='chat'?'#c58be5':name==='sale'?'#e58a81':name==='balance'?'#7ba952':name==='total'?'#e8a53b':'#6aa8d1';ctx.lineWidth=Math.max(2,w/400);ctx.strokeRect(r.x,r.y,r.w,r.h);ctx.fillStyle=ctx.strokeStyle;ctx.font=`${Math.max(12,w/100)}px sans-serif`;ctx.fillText(name==='chat'?'SHOP CHAT':name==='sale'?'SALE SNAPSHOT':name==='balance'?'MY MESOS':name==='total'?'TOTAL':'SOLD ITEMS',r.x+4,Math.max(15,r.y-5));}if(drag){ctx.strokeStyle='#fff';ctx.lineWidth=3;ctx.strokeRect(drag.x,drag.y,drag.endX-drag.x,drag.endY-drag.y);}}frame=requestAnimationFrame(draw);}
+function point(e){const b=preview.getBoundingClientRect();return sourcePoint({x:e.clientX,y:e.clientY},{x:b.left,y:b.top,width:b.width,height:b.height},{width:preview.width,height:preview.height});}
 function selectRegion(name){
  mode=name;$('capture-details').open=true;$('capture-details').parentElement.closest('details').open=true;
  $('capture-details').scrollIntoView({block:'center',behavior:'smooth'});
@@ -57,12 +63,12 @@ preview.onpointerup=e=>{
  drag=null;mode=null;controls();
 };
 preview.onpointercancel=()=>{drag=null;};
-function crop(name,scale=1){const r=regions[name];if(!r||!stream||!video.videoWidth)throw Error('Reconnect and select both reading areas.');const c=document.createElement('canvas');c.width=r.w*scale;c.height=r.h*scale;const g=c.getContext('2d');g.imageSmoothingEnabled=false;g.drawImage(video,r.x,r.y,r.w,r.h,0,0,c.width,c.height);return c;}
+function crop(name,scale=1){const r=regions[name];if(!validRegion(r,video.videoWidth,video.videoHeight))throw Error('Capture area moved outside the source. Run Auto Select again.');if(!r||!stream||!video.videoWidth)throw Error('Reconnect and select both reading areas.');const c=document.createElement('canvas');c.width=r.w*scale;c.height=r.h*scale;const g=c.getContext('2d');g.imageSmoothingEnabled=false;g.drawImage(video,r.x,r.y,r.w,r.h,0,0,c.width,c.height);return c;}
 function prepare(image,threshold=false){const c=document.createElement('canvas');c.width=image.width+40;c.height=image.height+40;const g=c.getContext('2d',{willReadFrequently:true});g.fillStyle='#fff';g.fillRect(0,0,c.width,c.height);g.drawImage(image,20,20);const data=g.getImageData(20,20,image.width,image.height);for(let p=0;p<data.data.length;p+=4){let v=.299*data.data[p]+.587*data.data[p+1]+.114*data.data[p+2];v=threshold?(v<165?0:255):Math.max(0,Math.min(255,(v-128)*1.4+128));data.data[p]=data.data[p+1]=data.data[p+2]=v;}g.putImageData(data,20,20);return c;}
 function showCrop(id,image){const canvas=$(id);canvas.hidden=false;canvas.width=image.width;canvas.height=image.height;canvas.getContext('2d').drawImage(image,0,0);}
 async function getWorker(){if(worker)return worker;if(!workerPromise){workerPromise=(async()=>{status('Loading the OCR engine for the first reading…');if(!window.Tesseract){await new Promise((resolve,reject)=>{const s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/tesseract.js@6.0.1/dist/tesseract.min.js';s.onload=resolve;s.onerror=()=>{s.remove();reject(Error('Could not load OCR. Check your connection and retry.'));};document.head.append(s);});}worker=await window.Tesseract.createWorker('eng',1,{logger:()=>{}});await worker.setParameters({tessedit_pageseg_mode:'6'});return worker;})();}try{return await workerPromise;}catch(e){workerPromise=null;throw e;}}
 async function reading(){
- const totalImage=crop('total',4),itemsImage=crop('items',4),picture=crop(regions.sale?'sale':'items');
+ const totalImage=crop('total',4),itemsImage=crop('items',4),picture=crop('items');
  showCrop('total-crop',crop('total',2));showCrop('items-crop',crop('items',2));
  const w=await getWorker();
  await w.setParameters({tessedit_pageseg_mode:'7',tessedit_char_whitelist:'0123456789, .'});
@@ -79,6 +85,7 @@ async function reading(){
  $('item-quality').classList.toggle('uncertain',!chosen.itemReliable);
  $('raw-ocr').textContent='Total pass 1: '+t.data.text.trim()+'\nTotal pass 2: '+t2.data.text.trim()+'\n\nItem pass 1:\n'+i.data.text.trim()+'\n\nItem pass 2:\n'+i2.data.text.trim();
  $('ocr-quality').textContent='Total confidence: '+Math.round(Math.min(t.data.confidence,t2.data.confidence))+'% · Item text: '+Math.round(chosen.confidence)+'%'+(a!==b?' · Total readings disagree':'');
+ debugCapture({total,balance,confidence:Math.min(t.data.confidence,t2.data.confidence),selectedItemOCR:[i.data.text,i2.data.text]});
  return{total,balance,rawFirst:i.data.text,rawSecond:i2.data.text,raw:i.data.text+'\n'+i2.data.text,items:chosen.items,itemReliable:chosen.itemReliable,confidence:Math.min(t.data.confidence,t2.data.confidence),picture};
 }
 $('read').onclick=async()=>{if(busy)return;busy=true;checking=true;controls();try{const r=await reading();status(r.total===null||r.confidence<65?'The total is unclear. Select a tighter area around the number, then check again.':'Reading complete. Compare the total and item text with your game before starting.',r.total===null||r.confidence<65);}catch(e){status(e.message,true);}finally{busy=false;checking=false;controls();}};
@@ -152,14 +159,20 @@ async function autoDetect(background=false){
  busy=true;checking=true;mode=null;drag=null;controls();
  try{
   status('Looking for Sold Items, sales totals, and your mesos balance…');
-  const scale=frameScale(video.videoWidth),c=document.createElement('canvas');
+  const captureStream=stream,sourceWidth=video.videoWidth,sourceHeight=video.videoHeight;
+  if(!sourceWidth||!sourceHeight||video.readyState<2)throw Error('The shared video has not produced a frame yet. Wait for the preview, then retry Auto Select.');
+  const scale=frameScale(sourceWidth),c=document.createElement('canvas');
   c.width=Math.round(video.videoWidth*scale);c.height=Math.round(video.videoHeight*scale);
   const g=c.getContext('2d',{willReadFrequently:true});g.imageSmoothingEnabled=false;g.drawImage(video,0,0,c.width,c.height);
-  const w=await getWorker();await w.setParameters({tessedit_pageseg_mode:'11',tessedit_char_whitelist:''});
-  const result=await w.recognize(c,{}, {text:true,tsv:true});
-  const pixels=g.getImageData(0,0,c.width,c.height);
-  const coinScore=coinScorer(pixels,scale);
-  const found=locateRegions(tsvWords(result.data.tsv),c.width,c.height,scale,coinScore);
+  const w=await getWorker(),pixels=g.getImageData(0,0,c.width,c.height),coinScore=coinScorer(pixels,scale);
+  const detection=await detectStoreRegions({width:c.width,height:c.height,scale,sourceWidth,sourceHeight,coinScore,
+   isCurrent:()=>stream===captureStream&&video.videoWidth===sourceWidth&&video.videoHeight===sourceHeight,
+   onProgress:({attempt,pass})=>status('Finding store regions · OCR pass '+attempt+'/3 ('+pass+')…'),
+   recognize:async pass=>{let image=c;if(pass.name!=='original'){image=document.createElement('canvas');image.width=c.width;image.height=c.height;const imageContext=image.getContext('2d'),enhanced=imageContext.createImageData(c.width,c.height);enhanced.data.set(enhanceFramePixels(pixels.data,pass.name==='threshold'));imageContext.putImageData(enhanced,0,0);}await w.setParameters({tessedit_pageseg_mode:pass.mode,tessedit_char_whitelist:''});return w.recognize(image,{},{text:true,tsv:true});}
+  });
+  lastAutoDetection={attempts:detection.attempts,missing:detection.missing};
+  const found=detection.regions;debugCapture({detected:found,confidence:detection.confidence});
+  if(detection.cancelled){status('Capture changed while detecting. Run Auto Select again on the current frame.',true);return;}
   if(!stream)return;
   if(background&&(!found.total||!found.items||!found.balance)){stop('Could not relocate all store evidence areas. Review Auto Select before restarting.');return;}
   if(background&&regions.chat&&regions.sale&&found.sale&&['x','y','w','h'].some(k=>Math.abs(regions.sale[k]-found.sale[k])>5)){stop('Store layout moved. Reselect shop chat before restarting to avoid sending the wrong area.');return;}
@@ -167,8 +180,8 @@ async function autoDetect(background=false){
   if(background){status(found.total?'Your windows moved. Areas re-detected automatically; still watching.':'Your windows moved and the Sales total could not be found again. Keep Sold Items visible or select it manually.',!found.total);return;}
   if(regions.total&&regions.items)await reading();else if(regions.balance)await readBalance(w);
   const missing=[];if(!found.total||!found.items)missing.push('Sold Items / Total Sales');if(!found.balance)missing.push('personal mesos');
-  status(missing.length?'Auto-detection could not confidently locate '+missing.join(' and ')+'. Use the manual selection buttons for those areas.':'Found Sold Items, Total Sales, and your personal mesos. Check the highlighted areas before starting.'+(found.totalEstimated?' The Total Sales number was hard to read, so its area is an estimate: make sure the highlight covers the number.':''),missing.length>0);
- }catch(e){status('Auto-detection unavailable: '+e.message+' You can select the areas manually.',true);}
+  status(missing.length?'Auto-detection could not confidently locate '+missing.join(' and ')+' after alternate OCR passes. Keep both panels unobstructed and try Auto Select again; missing regions remain unselected.':'Found Sold Items, Total Sales, and your personal mesos. Check the highlighted areas before starting.'+(found.totalEstimated?' The Total Sales number was hard to read, so its area is an estimate: make sure the highlight covers the number.':''),missing.length>0);
+ }catch(e){debugCapture({failure:e.message});status('Auto-detection unavailable: '+e.message+' You can select the areas manually.',true);}
  finally{busy=false;checking=false;controls();}
 }
 $('auto-detect').onclick=()=>autoDetect();

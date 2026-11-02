@@ -1,11 +1,11 @@
 // Navigation, world picker, FM Megaphones and Settings (including admin moderation).
 import {NOT_SET_UP,configured,worlds,megaphonePlans,liveMegaphones,myMegaphones,startCheckout,moderateMegaphone,adminSignIn,adminState,signOut,moderationQueue,unverifiedItems,updateItem,catalogSyncLog,catalogSyncNow} from './api.mjs?v=ms-2';
 import {checkMegaphone,MAX_MESSAGE} from './megaphone-rules.mjs?v=pc-1';
-import {show,worldChanged,ago,iconEl} from './checker.mjs?v=ms-3';
+import {show,worldChanged,ago,iconEl} from './checker.mjs?v=ms-2';
 const $=id=>document.getElementById(id);
 const el=(tag,props={},...kids)=>{const e=Object.assign(document.createElement(tag),props);e.append(...kids.filter(k=>k!=null&&k!==false));return e;};
 const money=c=>'$'+(c/100).toFixed(2);
-const VIEWS=['checker','trends','scanner','history','megaphones','store','settings'];
+const VIEWS=['checker','trends','scanner','history','megaphones','store','settings','stores','opportunities','watchlist','alerts','reports'];
 const LEGACY={watcher:'store','sale-activity':'store',support:'store',discord:'store',guide:'settings',prices:'checker',item:'checker'};
 
 // ---- Router ----
@@ -14,7 +14,7 @@ function route(){
  const view=VIEWS.includes(head)?head:LEGACY[head]||'checker',param=head==='item'?arg:view==='history'?arg:null;
  for(const v of document.querySelectorAll('.view'))v.hidden=v.dataset.view!==view;
  for(const a of document.querySelectorAll('#nav a'))a.toggleAttribute('aria-current',a.dataset.view===view);
- document.body.dataset.view=view;
+ document.body.dataset.view=view;$('community-status').textContent='';window.dispatchEvent(new CustomEvent('mesoswatch:view',{detail:{view,param:arg}}));
  if(view!=='checker')document.title=document.querySelector(`#nav a[data-view="${view}"]`)?.textContent.trim()+' · Mesos-Watch';
  show(view,param).catch(()=>{});
  if(view==='megaphones')loadMegaphoneView(new URLSearchParams(query));
@@ -25,7 +25,7 @@ window.addEventListener('hashchange',route);
 
 // ---- World ----
 const ws=worlds(),sel=$('world');
-sel.replaceChildren(...(ws.length?ws.map(w=>new Option(w,w)):[new Option('All worlds','')]));
+sel.replaceChildren(...(ws.length?ws.map(w=>new Option(w,w)):[new Option('Unspecified world','')]));
 try{const saved=localStorage.getItem('mw-world');if(ws.includes(saved))sel.value=saved;}catch{}
 sel.hidden=!ws.length;
 sel.onchange=()=>{try{localStorage.setItem('mw-world',sel.value);}catch{}worldChanged();route();loadStrip();};
@@ -39,7 +39,7 @@ async function loadStrip(){
  if(strip.length>1)stripTimer=setInterval(showStrip,8000);
 }
 function showStrip(){
- if(!strip.length)return;const m=strip[stripIdx++%strip.length];
+ strip=strip.filter(m=>new Date(m.ends_at)>new Date());$('mega-strip').hidden=!strip.length;if(!strip.length)return;const m=strip[stripIdx++%strip.length];
  $('mega-text').replaceChildren(...[m.sender&&el('b',{textContent:m.sender+' : '}),document.createTextNode(m.message)].filter(Boolean));
  $('mega-pos').textContent=strip.length>1?`${(stripIdx-1)%strip.length+1}/${strip.length}`:'';
 }
@@ -48,15 +48,15 @@ setInterval(loadStrip,60000);
 // ---- FM Megaphones view ----
 let plans=[],chosen=null;
 async function loadMegaphoneView(q){
- if(q.get('paid'))note('Payment received. Your megaphone is in the review queue and its time starts when it is approved and a slot is free.','ok');
+ if(q.get('paid'))note('Checkout returned. Payment status is confirmed by the server; check your campaign status below.','ok');
  else if(q.get('cancelled'))note('Checkout cancelled. You were not charged.','');
  if(!configured()){$('mg-buy').disabled=true;note('Megaphones are not available yet: the site owner has not connected the database and payments.','warn');$('mg-live').replaceChildren(el('li',{className:'empty',textContent:'Unavailable until the site is connected.'}));$('mg-mine').replaceChildren(el('li',{className:'empty',textContent:'Unavailable until the site is connected.'}));renderPlans(FALLBACK_PLANS);return;}
  try{plans=await megaphonePlans();renderPlans(plans);}catch(e){note(e.message,'error');$('mg-buy').disabled=true;}
  refreshMine();
- try{const live=await liveMegaphones(sel.value);$('mg-live').replaceChildren(...(live.length?live.map(m=>el('li',{},el('span',{textContent:(m.sender?m.sender+' : ':'')+m.message}),el('small',{textContent:'until '+new Date(m.ends_at).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})}))):[el('li',{className:'empty',textContent:'No megaphones live right now.'})]));}catch(e){$('mg-live').replaceChildren(el('li',{className:'empty',textContent:e.message}));}
+ try{const live=await liveMegaphones(sel.value);$('mg-live').replaceChildren(...(live.length?live.map(m=>el('li',{},el('span',{textContent:(m.sender?m.sender+' : ':'')+m.message}),el('small',{textContent:'Campaign '+m.id+' · until '+new Date(m.ends_at).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})}))):[el('li',{className:'empty',textContent:'No megaphones live right now.'})]));}catch(e){$('mg-live').replaceChildren(el('li',{className:'empty',textContent:e.message}));}
 }
 // Shown when the database is unreachable; the real prices come from megaphone_plans (supabase/migrations).
-const FALLBACK_PLANS=[{id:'p60',label:'1 hour',price_cents:100,minutes:60},{id:'p150',label:'2.5 hours',price_cents:200,minutes:150},{id:'p360',label:'6 hours',price_cents:400,minutes:360},{id:'p720',label:'12 hours',price_cents:700,minutes:720},{id:'p1440',label:'24 hours',price_cents:1200,minutes:1440}];
+const FALLBACK_PLANS=[{id:'basic30',label:'Basic · 30 minutes',price_cents:199,minutes:30},{id:'premium120',label:'Premium · 2 hours',price_cents:399,minutes:120},{id:'featured360',label:'Featured · 6 hours',price_cents:599,minutes:360}];
 // Saving against the 1-hour rate (the cheapest plan per minute is the reference only if it is the shortest).
 function planNote(p,list){const base=list.reduce((a,b)=>a.minutes<b.minutes?a:b);const perHour=p.price_cents*60/p.minutes,save=Math.round(100*(1-perHour/(base.price_cents*60/base.minutes)));return money(Math.round(perHour))+' per hour'+(save>0?` · save ${save}%`:'');}
 function renderPlans(list){
@@ -76,7 +76,7 @@ function note(text,kind){const n=$('mg-note');n.textContent=text;n.className='st
 async function refreshMine(){
  try{const mine=await myMegaphones();
   const label={awaiting_payment:'Awaiting payment',paid_pending_review:'Paid · waiting for review',queued:'Approved · queued',live:'Live now',expired:'Finished',rejected:'Rejected',refunded:'Refunded',cancelled:'Cancelled',removed:'Removed'};
-  $('mg-mine').replaceChildren(...(mine.length?mine.map(m=>el('li',{},el('span',{textContent:m.message}),el('small',{textContent:[label[m.display_status]||m.display_status,`${m.minutes} min · ${money(m.price_cents)}`,m.starts_at&&m.display_status!=='expired'?'starts '+new Date(m.starts_at).toLocaleString():'',m.reject_reason,m.livemode?'':'test payment'].filter(Boolean).join(' · ')}))):[el('li',{className:'empty',textContent:'You have not bought a megaphone in this browser.'})]));
+  $('mg-mine').replaceChildren(...(mine.length?mine.map(m=>el('li',{},el('span',{textContent:m.message}),el('small',{textContent:['Campaign '+m.id,label[m.display_status]||m.display_status,`${m.minutes} min · ${money(m.price_cents)}`,m.starts_at&&m.display_status!=='expired'?'starts '+new Date(m.starts_at).toLocaleString():'',m.reject_reason,m.livemode?'':'test payment'].filter(Boolean).join(' · ')}))):[el('li',{className:'empty',textContent:'You have not bought a megaphone in this browser.'})]));
  }catch(e){$('mg-mine').replaceChildren(el('li',{className:'empty',textContent:e.message}));}
 }
 $('mg-message').oninput=preview;$('mg-sender').oninput=preview;
@@ -95,7 +95,7 @@ async function loadSettings(){
 const SYNC_LABEL={requested:'Downloading…',applied:'Updated',unchanged:'No changes',failed:'Failed'};
 async function loadSync(){
  try{const log=await catalogSyncLog();
-  $('adm-sync-log').replaceChildren(...(log.length?log.map(r=>el('li',{},el('span',{className:'msg',textContent:`${SYNC_LABEL[r.status]||r.status}${r.items!=null?` · ${r.items} items`:''}`}),el('small',{textContent:`${new Date(r.requested_at).toLocaleString()}${r.message?' · '+r.message:''}`}))):[el('li',{className:'empty',textContent:'No automatic update has run yet. The first one runs at the next 06:17 UTC, or press Update now.'})]));
+  $('adm-sync-log').replaceChildren(...(log.length?log.map(r=>el('li',{},el('span',{className:'msg',textContent:`${SYNC_LABEL[r.status]||r.status}${r.items!=null?` · ${r.items} items`:''}`}),el('small',{textContent:`${new Date(r.requested_at).toLocaleString()}${r.message?' · '+r.message:''}`}))):[el('li',{className:'empty',textContent:'No catalog update recorded. Source permission and operator configuration are required before synchronization.'})]));
  }catch(e){$('adm-sync-log').replaceChildren(el('li',{className:'empty error',textContent:e.message}));}
 }
 $('adm-sync').onclick=async()=>{const b=$('adm-sync');b.disabled=true;try{const id=await catalogSyncNow();b.textContent=id?'Downloading… applied within 5 minutes':'A download is already running';}catch(e){b.textContent=e.message;}loadSync();setTimeout(()=>{b.disabled=false;b.textContent='Update now';loadSync();},60000);};
@@ -114,8 +114,9 @@ async function loadItems(){
  try{const items=await unverifiedItems();
   $('adm-items').replaceChildren(...(items.length?items.map(it=>{const gid=el('input',{type:'number',placeholder:'Game item ID',min:1000000,max:9999999,value:it.game_id||''}),name=el('input',{value:it.name,maxLength:60}),msg=el('small');
    // Names outside the Classic catalog are nearly always NX items, so NX is the default type.
-   const cat=el('select',{ariaLabel:'Item type'},...[['cash','NX'],['equip','Equipment'],['use','Use'],['setup','Setup'],['etc','Etc']].map(([v,t])=>new Option(t,v,false,v===(it.category!=='unknown'?it.category:'cash'))));
-   return el('li',{},iconEl(it,28),name,cat,gid,el('button',{textContent:'Verify',onclick:async()=>{try{await updateItem(it.id,{name:name.value.trim(),category:cat.value,game_id:gid.value?+gid.value:null,verified:true});loadItems();}catch(e){msg.textContent=e.message;}}}),el('small',{textContent:'first seen '+ago(it.first_seen)}),msg);}):[el('li',{className:'empty',textContent:'No community items waiting for review.'})]));
+   const source=el('input',{placeholder:'Classic release verification URL (https://…)',type:'url',required:true});
+   const cat=el('select',{ariaLabel:'Item type'},...[['cash','NX'],['equip','Equipment'],['use','Use'],['setup','Setup'],['etc','Etc']].map(([v,t])=>new Option(t,v,false,v===(it.category!=='unknown'?it.category:'equip'))));
+   return el('li',{},iconEl(it,28),name,cat,gid,source,el('button',{textContent:'Verify',onclick:async()=>{try{if(!/^https:\/\//.test(source.value.trim()))throw Error('Provide a release verification source URL.');await updateItem(it.id,{name:name.value.trim(),category:cat.value,game_id:gid.value?+gid.value:null,verified:true,release_status:'released',last_verified_at:new Date().toISOString(),verification_source:source.value.trim()});loadItems();}catch(e){msg.textContent=e.message;}}}),el('small',{textContent:'first seen '+ago(it.first_seen)}),msg);}):[el('li',{className:'empty',textContent:'No community items waiting for review.'})]));
  }catch(e){$('adm-items').replaceChildren(el('li',{className:'empty error',textContent:e.message}));}
 }
 // Two-step confirm built into the page (no browser dialogs).

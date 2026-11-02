@@ -41,9 +41,9 @@ export async function searchItems(q,world='',lim=50,offset=0){
  return offset>0?[]:rows(sb.rpc('search_items',{q,p_world:world,lim:Math.min(lim,25)}),'Search failed');
 }
 export const getItem=async id=>rows((await client()).from('items').select('*').eq('id',id).maybeSingle(),'Could not load the item');
-export const itemSummary=async(id,world='')=>rows((await client()).rpc('item_summary',{p_item:id,p_world:world}),'Could not load prices');
+export const itemSummary=async(id,world='')=>{const s=await rows((await client()).rpc('item_summary',{p_item:id,p_world:world}),'Could not load prices');return s.verified_sales_only?s:{...s,estimated_value:null,median_sale_30d:null,sales_30d:0,sale_reporters_30d:0};};
 export const currentListings=async(id,world='')=>rows((await client()).rpc('current_listings',{p_item:id,p_world:world,lim:100}),'Could not load listings');
-export const priceHistory=async(id,world='',range='7d')=>rows((await client()).rpc('price_history',{p_item:id,p_world:world,p_range:range}),'Could not load history');
+export const priceHistory=async(id,world='',range='7d')=>{const s=await rows((await client()).rpc('item_summary',{p_item:id,p_world:world}),'Could not check evidence version');const h=await rows((await client()).rpc('price_history',{p_item:id,p_world:world,p_range:range}),'Could not load history');return s.verified_sales_only?h:h.filter(r=>r.kind==='ask');};
 export const itemVariations=async(id,world='')=>rows((await client()).rpc('item_variations',{p_item:id,p_world:world}),'Could not load variations');
 export async function marketTrends(world='',lim=60){
  const sb=await client();
@@ -61,7 +61,7 @@ export async function marketTrends(world='',lim=60){
 }
 export async function recentObservations(world='',lim=25){
  const sb=await client();
- const obs=await rows(sb.from('observations').select('id,kind,item_id,item_name,price,qty,shop_title,map,seen_at').eq('world',world).order('seen_at',{ascending:false}).limit(lim),'Could not load recent prices');
+ const obs=await rows(sb.from('market_observations').select('id,kind,verification_status,item_id,item_name,price,qty,shop_title,map,seen_at').eq('world',world).or('kind.eq.ask,verification_status.eq.verified').order('seen_at',{ascending:false}).limit(lim),'Could not load recent prices');
  const ids=[...new Set(obs.map(o=>o.item_id))];
  const its=ids.length?await rows(sb.from('items').select('id,name,game_id,icon_path,category').in('id',ids),'Could not load items'):[];
  const byId=new Map(its.map(i=>[i.id,i]));
@@ -75,21 +75,21 @@ export const matchNames=async names=>names.length?rows((await client()).rpc('mat
 export async function reportObservations(observations,{world=''}={}){
  const clean=observations.map(o=>({...o,item:String(o.item||'').replace(/\s+/g,' ').trim(),price:Math.round(Number(o.price)),qty:Math.max(1,Math.min(9999,Math.round(Number(o.qty)||1)))}))
   .filter(o=>o.item.length>=2&&Number.isFinite(o.price)&&o.price>=1&&o.price<=1e11);
- if(!clean.length)return 0;
+ if(!clean.length)return [];
  const sb=await session();
  const matched=new Map((await matchNames([...new Set(clean.map(o=>o.item))])).map(m=>[m.input,m]));
  const out=[];
  for(const o of clean){
   const m=matched.get(o.item),truncated=/(\.\.\.|…)$/.test(o.item);
   if(!m?.name&&truncated)continue;
-  out.push({kind:o.kind==='sale'?'sale':'ask',world,item_name:(m?.name||o.item).slice(0,60),price:o.price,qty:o.qty,stats:o.stats||{},shop_key:String(o.shopKey||'').slice(0,64),shop_title:String(o.shopTitle||'').slice(0,40),map:String(o.map||'').slice(0,40),channel:o.channel>=1&&o.channel<=40?o.channel:null});
+  out.push({kind:o.kind==='sale'?'sale':'ask',world,confidence:Number.isFinite(o.confidence)?Math.max(0,Math.min(100,o.confidence)):null,capture_source:o.kind==='sale'?'store':'scanner',item_name:(m?.name||o.item).slice(0,60),price:o.price,qty:o.qty,stats:o.stats||{},shop_key:String(o.shopKey||'').slice(0,64),shop_title:String(o.shopTitle||'').slice(0,40),map:String(o.map||'').slice(0,40),channel:o.channel>=1&&o.channel<=40?o.channel:null});
  }
- if(!out.length)return 0;
+ if(!out.length)return [];
  const {data,error}=await sb.from('observations').insert(out).select('id,item_id,item_name');
  if(error)throw Error(/rate limit/i.test(error.message)?'Too many reports from this browser. Scanning resumes in a few minutes.':'Could not save prices: '+error.message);
  // Rows the server skipped as duplicates are not returned. catalog: the name matched a catalog item (which has its own icon).
  const catalog=new Set([...matched.values()].filter(m=>m.name&&m.game_id).map(m=>m.name));
- return data.map(d=>({...d,catalog:catalog.has(d.item_name)}));
+ return (data||[]).map(d=>({...d,catalog:catalog.has(d.item_name),item:{id:d.item_id,name:d.item_name,game_id:[...matched.values()].find(m=>m.name===d.item_name)?.game_id}}));
 }
 
 // Community icon: an exact-size PNG of the sprite next to a listing. Becomes the item's icon once two players agree.
@@ -140,7 +140,7 @@ export async function adminSignIn(email){const sb=await client();const {error}=a
 export async function adminState(){if(!configured())return{email:null,admin:false};const sb=await client();const {data}=await sb.auth.getUser();const email=data.user?.email||null;if(!email)return{email:null,admin:false};const {data:admin}=await sb.rpc('is_admin');return{email,admin:!!admin};}
 export async function signOut(){const sb=await client();await sb.auth.signOut();sessionPromise=null;}
 export const moderationQueue=async()=>rows((await client()).from('megaphone_queue').select('*').in('display_status',['paid_pending_review','queued','live','awaiting_payment']).order('created_at',{ascending:false}).limit(100),'Could not load the queue');
-export const unverifiedItems=async()=>rows((await client()).from('items').select('id,name,category,game_id,icon_path,first_seen').eq('source','observed').eq('verified',false).order('first_seen',{ascending:false}).limit(50),'Could not load items');
+export const unverifiedItems=async()=>rows((await client()).from('items').select('id,name,category,game_id,icon_path,first_seen').or('verified.eq.false,release_status.eq.unverified').order('first_seen',{ascending:false}).limit(50),'Could not load items');
 // Automatic catalog updates (supabase/migrations/*_catalog_autosync.sql): recent runs, and a manual "update now".
 export const catalogSyncLog=async()=>rows((await client()).from('catalog_sync_log').select('requested_at,finished_at,status,items,message').order('id',{ascending:false}).limit(6),'Could not load catalog updates');
 export const catalogSyncNow=async()=>rows((await client()).rpc('catalog_sync_now'),'Could not start a catalog update');

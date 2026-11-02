@@ -1,7 +1,7 @@
 // Price history chart as SVG markup (pure: no DOM), from price_history rows {bucket, kind, low, median, high, n}.
 // Asking prices: orange line with a low–high band. Sales seen in sellers' Sold Items windows: green dots.
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-export const shortMesos=n=>n>=1e9?(n/1e9).toFixed(n>=1e10?0:1).replace(/\.0$/,'')+'b':n>=1e6?(n/1e6).toFixed(n>=1e7?0:1).replace(/\.0$/,'')+'m':n>=1e4?Math.round(n/1e3)+'k':String(n);
+export const shortMesos=n=>{const a=Math.abs(n),unit=a>=1e9?[1e9,'B']:a>=1e6?[1e6,'M']:a>=1e3?[1e3,'K']:null;return unit?(n/unit[0]).toFixed(1).replace(/\.0$/,'')+unit[1]:String(n);};
 const RANGE_MS={'24h':864e5,'7d':6048e5,'30d':2592e6,'90d':7776e6};
 
 export function chartSvg(rows,{range='7d',now=Date.now(),width=720,height=240}={}){

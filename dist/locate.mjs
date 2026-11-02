@@ -28,7 +28,7 @@ function phrase(lines,a,b){
    if(new RegExp('^'+a.source+b.source+'$').test(one))return union([ws[i]]);
    if(i<ws.length-1&&new RegExp('^'+a.source+'$').test(one)&&new RegExp('^'+b.source+'$').test(fold(ws[i+1].text)))return union(ws.slice(i,i+2));}}
  return null;}
-const TOTAL='tota[li]',SALES='sa[li]es?[:;]?',RECEIVED='re[cg]e[il]ved[:;]?';
+const TOTAL='tota[li][:;]?',SALES='sa[li]es?[:;]?',RECEIVED='re[cg]e[il]ved[:;]?';
 // Digits inside a word such as "13,679mesos" or "13,679)": the value, and the word's box trimmed to just the digits.
 function amount(w){
  const m=w.text.match(/^[^\d]{0,2}(\d[\d,. ]*\d|\d)[^\d]*$/);if(!m)return null;
@@ -38,6 +38,8 @@ function amount(w){
 
 export function locateRegions(words,width,height,scale=1,coinScore=()=>0){
  if(!Number.isFinite(scale)||scale<=0||!Number.isFinite(width)||!Number.isFinite(height)||width<=0||height<=0)return{};
+ // OCR engines sometimes return several label words in one word box. Split them with proportional geometry.
+ words=words.flatMap(w=>{const matches=[...String(w.text||'').matchAll(/\S+/g)];return matches.length<=1?[w]:matches.map(m=>({...w,text:m[0],x:w.x+w.w*m.index/w.text.length,w:w.w*m[0].length/w.text.length}));});
  words=words.filter(w=>[w.x,w.y,w.w,w.h,w.confidence].every(Number.isFinite)&&w.w>0&&w.h>0&&w.x>=0&&w.y>=0&&w.x+w.w<=width&&w.y+w.h<=height);
  const lines=rowsOf(words);
  const totalLabel=phrase(lines,{source:TOTAL},{source:SALES}),receivedLabel=phrase(lines,{source:TOTAL},{source:RECEIVED});
@@ -48,11 +50,12 @@ export function locateRegions(words,width,height,scale=1,coinScore=()=>0){
   const left=totalLabel.x-10*scale,limit=sameRow?receivedLabel.x:totalLabel.x+260*scale;
   const under=words.map(amount).filter(w=>w&&w.x>=left&&w.x+w.w<limit&&w.y>=totalLabel.y+totalLabel.h*.6&&w.y<totalLabel.y+65*scale);
   // Prefer confident readings; the game's small digits sometimes score low, and the total is read twice again before use.
-  const sure=under.filter(w=>w.confidence>=65),nums=(sure.length?sure:under.filter(w=>w.confidence>=30)).sort((a,b)=>a.y-b.y||a.x-b.x);
+  const inline=words.map(amount).filter(w=>w&&w.confidence>=65&&w.x>=totalLabel.x+totalLabel.w&&w.x+w.w<limit&&Math.abs((w.y+w.h/2)-(totalLabel.y+totalLabel.h/2))<Math.max(w.h,totalLabel.h)*.6);
+  const sure=under.filter(w=>w.confidence>=65),nums=(inline.length?inline:sure.length?sure:under.filter(w=>w.confidence>=30)).sort((a,b)=>a.y-b.y||a.x-b.x);
   // Side by side (one number under "Total Sales") or stacked (Total Sales above Total Received, which is the sales total less the fee).
   const top=nums[0],second=nums[1];
   const stackedOk=top&&second&&second.y>top.y+top.h*.6&&second.value<=top.value;
-  const closeToLabel=top&&top.y<=totalLabel.y+totalLabel.h*2.5;
+  const closeToLabel=top&&(inline.length===1||top.y<=totalLabel.y+totalLabel.h*2.5);
   if(top&&closeToLabel&&(nums.length===1||stackedOk)&&!nums.some(n=>n!==top&&Math.abs(n.y-top.y)<top.h*.6))result.total=rect({x:top.x-2*scale,y:top.y-2*scale,w:top.w+4*scale,h:top.h+4*scale});
   // Label found but its number unreadable in the full-screen pass: use the line just under the label.
   else if(!nums.length){result.total=rect({x:totalLabel.x-2*scale,y:totalLabel.y+totalLabel.h+1*scale,w:Math.min(Math.max(totalLabel.w,90*scale),limit-totalLabel.x)+4*scale,h:totalLabel.h*1.5});result.totalEstimated=true;}
@@ -77,7 +80,9 @@ export function locateRegions(words,width,height,scale=1,coinScore=()=>0){
  // The balance box's border often drags OCR confidence to 0 ("50,615)"), so a strong gold-coin match may stand in for confidence;
  // the balance itself is then read from the crop twice with a digit-only pass before it is shown.
  const digits=w=>parseTotal(w.text.replace(/^[^\d]+|[^\d]+$/g,''));
- const money=words.filter(w=>digits(w)!==null&&w.w>=w.h*.8&&!followedByMesos(w)&&(!shop||w.x<shop.x||w.x>shop.x+shop.w||w.y<shop.y||w.y>shop.y+shop.h)).filter(w=>!inventory||(w.y>inventory.y&&w.y<inventory.y+450*scale&&Math.abs(w.x-inventory.x)<230*scale)).map(w=>({word:w,score:coinScore(w)})).filter(c=>c.score>=.025).sort((a,b)=>b.score-a.score);
+ const inInventory=w=>!!inventory&&w.y>inventory.y&&w.y<inventory.y+450*scale&&Math.abs(w.x-inventory.x)<230*scale;
+ const inventoryMesos=w=>inInventory(w)&&words.some(label=>/^mesos?[:;]?$/i.test(label.text)&&label.x+label.w<=w.x&&w.x-label.x-label.w<150*scale&&Math.abs(label.y-w.y)<Math.max(label.h,w.h)*.6);
+ const money=words.filter(w=>digits(w)!==null&&w.w>=w.h*.8&&(!followedByMesos(w)||inInventory(w))&&(!shop||w.x<shop.x||w.x>shop.x+shop.w||w.y<shop.y||w.y>shop.y+shop.h)).filter(w=>!inventory||(w.y>inventory.y&&w.y<inventory.y+450*scale&&Math.abs(w.x-inventory.x)<230*scale)).map(w=>({word:w,score:inventoryMesos(w)?1:coinScore(w)})).filter(c=>c.score>=.025).sort((a,b)=>b.score-a.score);
  // Never choose between multiple money-looking fields without a clear winner.
  if(money.length===1||(money.length>1&&money[0].score>=money[1].score*2.5)){const w=money[0].word;result.balance=rect({x:w.x-2*scale,y:w.y-2*scale,w:w.w+4*scale,h:w.h+4*scale});}
  return result;
