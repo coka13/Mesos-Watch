@@ -4,7 +4,7 @@ import {detectStoreRegions,enhanceFramePixels,storeRegionsReady} from './auto-se
 import {deliverDiscord} from './discord-delivery.mjs';
 import {sourcePoint,validRegion} from './capture-geometry.mjs';
 import {observeChat} from './chat.mjs?v=reader-4';
-import {discordBody,saleEmbed} from './notifications.mjs?v=ms-4';
+import {discordBody,saleEmbed,saleSessionSummary,sampleSaleEmbed} from './notifications.mjs?v=sale-2';
 import {createSession,observeStore} from './store-session.mjs?v=ms-5';
 import {chooseSoldReading,chatVisitors,parsePriceList,majorityNumber,STORE_FEE_RATE} from './sold-items.mjs?v=ms-5';
 import {parseTotal,chooseItemReading} from './detection.mjs?v=reader-4';
@@ -45,7 +45,7 @@ async function recordVerified(result,r){
   sales.unshift(entry);renderSales();
   if($('share-sales')?.checked&&boardConfigured()&&sale.qty>0&&!sale.unitPriceRange)reportObservations([{kind:'sale',item:entry.names,price:sale.unitPrice,qty:sale.qty}],{world:$('world')?.value||''}).then(n=>{if(n?.length){entry.shared='Shared to price board';renderSales();}}).catch(()=>{});
   if($('webhook').value.trim()){
-   try{await sendEmbed(saleEmbed({...sale,name:entry.names,icon:entry.icon,store:$('mystore-name').value.trim(),time:entry.time}),r.picture);entry.delivery='Sent to Discord';}
+   try{await sendEmbed(saleEmbed({...sale,...saleSessionSummary(sales,state.id),balance:r.balance,name:entry.names,icon:entry.icon,store:$('mystore-name').value.trim(),time:entry.time}),r.picture);entry.delivery='Sent to Discord';}
    catch(e){entry.delivery='Discord delivery failed — not retried';status('Sale recorded, but Discord delivery failed: '+e.message,true);}
    renderSales();
   }
@@ -74,7 +74,7 @@ async function send(content,picture,filename='sold-items.png'){
  const payload=discordBody(content,blob,filename);
  await deliverDiscord(url,payload);
 }
-$('test').onclick=async()=>{try{$('test').disabled=true;await send('Mesos-Watch test: your shop alerts will arrive here.');status('Test delivered to Discord. You’re connected.');$('discord-step').open=false;}catch(e){status(e.message,true);}finally{$('test').disabled=false;}};
+$('test').onclick=async()=>{try{$('test').disabled=true;await sendEmbed(sampleSaleEmbed());status('Sample sale notification delivered to Discord. No sale was recorded.');$('discord-step').open=false;}catch(e){status(e.message,true);}finally{$('test').disabled=false;}};
 function stop(message='Watching stopped. Restart to establish a fresh baseline.') {watching=false;clearTimeout(timer);timer=null;$('badge').classList.remove('live');$('badge').replaceChildren(Object.assign(document.createElement('span'),{className:'dot'}),document.createTextNode(' Not watching'));controls();status(message);}
 $('stop').onclick=()=>stop();
 $('connect').onclick=async()=>{try{if(!navigator.mediaDevices?.getDisplayMedia)throw Error('Screen sharing isn’t available here. Open this page in desktop Chrome or Edge.');if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}stream=await navigator.mediaDevices.getDisplayMedia({video:{frameRate:2},audio:false});video.srcObject=stream;await video.play();regions={};mode=null;stream.getVideoTracks()[0].addEventListener('ended',()=>{stop('Game sharing ended. Reconnect your window to continue.');stream=null;video.srcObject=null;regions={};$('preview').hidden=true;$('capture-empty').hidden=false;controls();window.dispatchEvent(new Event('mesoswatch:capture-ended'));});$('preview').hidden=false;$('capture-empty').hidden=true;$('source-note').textContent='Window connected';window.dispatchEvent(new Event('mesoswatch:capture-started'));cancelAnimationFrame(frame);controls();draw();await autoDetect();}catch(e){status(e.name==='NotAllowedError'?'Window sharing was cancelled. You can try again.':e.message,true);controls();}};
@@ -187,11 +187,12 @@ async function tick(){
    const entry={time:new Date().toISOString(),sessionId:state.id,initialBalance:state.initialBalance,picture:soldPicture(r.picture),names,amount:result.amount,evidence:result.reason,corroborated:result.corroborated,delivery:$('webhook').value.trim()?'Sending':'Recorded (Discord not connected)'};sales.unshift(entry);renderSales();
    if(result.corroborated)shareSale(result,r).then(t=>{if(t){entry.shared=t;renderSales();}});
    if(!result.corroborated){entry.delivery='Unverified · no Discord sale alert or market contribution';status(result.reason,true);renderSales();if(watching&&$('chat-alerts').checked&&$('webhook').value.trim())await checkChat();return;}
+   entry.net=result.amount;
    if($('webhook').value.trim())try{
-    await send('MapleStory Classic · sale evidence corroborated\nItems: '+names.slice(0,1000)+'\nSales total increased by '+fmt(result.amount)+' mesos.\n'+new Date().toLocaleString()+'\nSeveral purchases may be grouped. See the attached Sold Items snapshot.',r.picture,'sold-items.png');
+    await sendEmbed(saleEmbed({name:names,qty:result.quantity,net:result.amount,...saleSessionSummary(sales,state.id),balance:r.balance,store:$('mystore-name').value.trim(),time:entry.time}),r.picture);
     entry.delivery='Sent to Discord';status('Sale snapshot sent. Still watching your store.');
    }catch(e){entry.delivery='Delivery failed — not retried';stop('Sale snapshot delivery failed. Check your webhook, then restart. '+e.message);$('status').classList.add('error');}
-   else status('Sale recorded. Connect Discord under Discord Integration to get notified.');
+   else status('Sale recorded. Open the optional Send alerts to Discord step to get notified.');
    renderSales();
   }else status(result.kind==='pending'?(r.mode==='sold-items'?'Sold Items changed. Confirming a second reading…':'Sales total changed. Waiting for a second reading…'):result.kind==='baseline'?'Baseline set. Watching for new sales and messages.':'Last checked '+new Date().toLocaleTimeString()+'. No new sale detected.');
   if(watching&&$('chat-alerts').checked&&$('webhook').value.trim())await checkChat();
