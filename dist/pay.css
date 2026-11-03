@@ -1,0 +1,35 @@
+/* PayPal / crypto payment buttons, donation box, sponsor dialog and return toast (dist/pay.mjs). */
+.pay-buttons{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.pay-buttons button{flex:1 1 140px}
+.pay-buttons .pay-paypal{background:linear-gradient(#ffd75e,#f5b300);color:#253b80;text-shadow:none}
+.pay-buttons .pay-crypto{background:linear-gradient(#5a6b8c,#2e3a52);color:#fff;text-shadow:0 1px 0 #1b2333}
+.pay-buttons button:disabled{opacity:.55;cursor:not-allowed}
+
+.donate-pay{margin-top:10px;display:grid;gap:8px}
+.donate-amounts{display:flex;flex-wrap:wrap;gap:6px}
+.donate-amounts .chip{font:800 13px var(--text);color:var(--wood);background:var(--cream);border:2px solid var(--wood);border-radius:999px;padding:4px 12px;cursor:pointer}
+.donate-amounts .chip[aria-checked=true]{color:#fff;background:linear-gradient(#ffb44d,#e0701a);text-shadow:0 1px 0 var(--wood)}
+.donate-custom{width:84px;border:2px solid var(--wood);border-radius:999px;padding:4px 10px;font:700 13px var(--text);background:#fff}
+.donate-extra summary{cursor:pointer;font-weight:700;color:var(--muted);font-size:12px}
+.donate-extra input:not([type=checkbox]){display:block;width:100%;box-sizing:border-box;margin-top:6px;border:2px solid var(--cream-2);border-radius:8px;padding:6px 8px}
+.donate-extra .check{display:flex;gap:6px;align-items:center;font-size:12px;margin-top:6px}
+.donate-note{color:var(--muted)}
+.donor-wall{margin-top:10px;font-size:12px}
+.donor-wall ul{list-style:none;margin:4px 0 0;padding:0}
+.donor-wall li{padding:2px 0}
+
+.sponsor-open{margin-top:8px;width:100%;font:800 12px var(--text);color:var(--wood);background:var(--cream);border:2px dashed var(--wood);border-radius:10px;padding:6px;cursor:pointer}
+.sponsor-link{display:block;text-align:center;text-decoration:none;color:var(--wood)}
+.sponsor-link img{max-width:100%;max-height:250px;border-radius:8px;display:block;margin:auto}
+.sponsor-dialog{max-width:520px;width:calc(100% - 32px);border:3px solid var(--wood);border-radius:var(--radius);background:var(--cream);color:var(--ink);padding:18px 20px;box-shadow:0 6px 0 var(--wood-dark)}
+.sponsor-dialog::backdrop{background:#0b1f4099}
+.sponsor-dialog h2{margin:0 0 6px}
+.sponsor-dialog label{display:block;font-weight:800;margin:10px 0 4px}
+.sponsor-dialog input{width:100%;box-sizing:border-box;border:2px solid var(--wood);border-radius:10px;padding:8px 10px;font:600 14px var(--text);background:#fff}
+.sponsor-dialog .plan input{width:auto}
+.sponsor-preview{min-height:60px;border:2px dashed var(--cream-2);border-radius:10px;padding:10px}
+.sponsor-close{margin-top:12px;background:none;border:0;color:var(--muted);font-weight:700;cursor:pointer;text-decoration:underline}
+
+.pay-toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:1000;max-width:min(560px,calc(100% - 32px));box-shadow:0 4px 0 #0003;cursor:pointer}
+#adm-pay .sponsor-link{display:inline-block;margin-right:8px}
+#adm-pay .sponsor-link img{max-height:40px;display:inline-block}

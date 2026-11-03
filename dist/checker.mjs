@@ -38,7 +38,7 @@ export function iconEl(item,size=32){
 const itemLink=(item,text)=>el('a',{href:'#item/'+item.id,className:'item-link'},iconEl(item,28),el('span',{textContent:text||item.name}));
 
 // Meso coin, beside every amount of mesos so a price never reads as a plain count. The sprite is the in-game mesos coin.
-export function mesoEl(size=14){return el('span',{className:'meso',style:`--m:${size}px`,title:'mesos'},el('img',{src:'meso.png?v=ms-2',alt:'',width:size,height:size,decoding:'async'}));}
+export function mesoEl(size=14){return el('span',{className:'meso',style:`--m:${size}px`,title:'mesos'},el('img',{src:'meso.png?v=real-1',alt:'',width:size,height:size,decoding:'async'}));}
 export const mesoAmt=(text,size=14)=>{const raw=String(text),numeric=/^[+-]?[\d,]+$/.test(raw)?Number(raw.replaceAll(',','')):null;return el('span',{className:'meso-amt',title:numeric===null?raw:numeric.toLocaleString('en-US')+' mesos'},mesoEl(size),document.createTextNode(numeric===null?raw:shortMesos(numeric)));};
 export const MesoPrice=(value,size=14)=>mesoAmt(Number(value).toLocaleString('en-US'),size);
 export const ItemDisplay=(item,size=28)=>el('span',{className:'item-link',title:[item.name,statText(item.base_stats?.stats),item.release_status].filter(Boolean).join(' · ')},iconEl(item,size),el('span',{textContent:item.name}));

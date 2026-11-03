@@ -2,30 +2,59 @@
 // scripts/make-ocr-fixture.mjs. Regenerate the fixture with that script if the OCR pipeline changes.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import {tsvWords,locateRegions} from '../dist/locate.mjs';
+import {fileURLToPath} from 'node:url';
+import {Jimp} from 'jimp';
+import {tsvWords,locateRegions,coinScorer} from '../dist/locate.mjs';
 import {parseTotal} from '../dist/detection.mjs';
 import {previewRect,sourcePoint} from '../dist/capture-geometry.mjs';
-import {parseSoldRecords,chooseSoldReading,chatVisitors,sameName,parsePriceList,listedPrice,netOf,unitPricesFor,verifySales,observeSoldItems,agreedNumber,STORE_FEE_RATE} from '../dist/sold-items.mjs';
+import {chooseSoldReading,chatVisitors,sameName,parsePriceList,listedPrice,netOf,unitPricesFor,verifySales,observeSoldItems,agreedNumber,majorityNumber,STORE_FEE_RATE} from '../dist/sold-items.mjs';
 import {createSession} from '../dist/store-session.mjs';
 
 const fx=JSON.parse(fs.readFileSync(new URL('./fixtures/store-reference.ocr.json',import.meta.url),'utf8'));
 const W=fx.width*fx.scale,H=fx.height*fx.scale;
+// Frame pixels as the browser has them: the screenshot upscaled nearest-neighbour by the OCR scale.
+const framePixels=async(image,scale)=>{const i=image.clone().resize({w:Math.round(image.bitmap.width*scale),h:Math.round(image.bitmap.height*scale),mode:'nearestNeighbor'});return{data:i.bitmap.data,width:i.bitmap.width,height:i.bitmap.height};};
+const referenceImage=await Jimp.read(fileURLToPath(new URL('./fixtures/store-reference.png',import.meta.url)));
+const locate=(f,px)=>locateRegions(tsvWords(f.passes.original.tsv),f.width*f.scale,f.height*f.scale,f.scale,coinScorer(px,f.scale),px);
 const inside=(r,box,slack=6)=>r.x>=box.x-slack&&r.y>=box.y-slack&&r.x+r.w<=box.x+box.w+slack&&r.y+r.h<=box.y+box.h+slack;
 const covers=(r,box)=>r.x<=box.x&&r.y<=box.y&&r.x+r.w>=box.x+box.w&&r.y+r.h>=box.y+box.h;
-// Hand-measured from the screenshot: the three highlighted areas, and the content each must cover.
-const BALANCE={x:133,y:148,w:100,h:23},BALANCE_DIGITS={x:180,y:152,w:48,h:14};
-const SOLD={x:538,y:20,w:232,h:274},SOLD_TEXT={x:583,y:54,w:140,h:220};
-const CHAT={x:237,y:172,w:291,h:224},CHAT_TEXT={x:251,y:183,w:200,h:195};
+// The user's placements, measured inside the green and red outlines drawn on the screenshot, and the content each must cover.
+// Chat follows the user's later placement on the live store: the white message area and the input line, without the scrollbar.
+const BALANCE={x:134,y:147,w:96,h:26},BALANCE_DIGITS={x:180,y:152,w:48,h:14};
+const SOLD={x:538,y:27,w:226,h:266},SOLD_TEXT={x:583,y:54,w:140,h:220};
+const CHAT={x:243,y:170,w:262,h:250},CHAT_TEXT={x:251,y:183,w:200,h:195};
 
 // ---- Auto Select: screen regions, not items ----
-const original=locateRegions(tsvWords(fx.passes.original.tsv),W,H,fx.scale);
+const original=locate(fx,await framePixels(referenceImage,fx.scale));
 assert.equal(original.mode,'sold-items','reference layout has no Total Sales');
+const near=(r,box,slack=2)=>['x','y','w','h'].every(k=>Math.abs(r[k]-box[k])<=slack);
 for(const [key,area,content] of [['items',SOLD,SOLD_TEXT],['chat',CHAT,CHAT_TEXT],['balance',BALANCE,BALANCE_DIGITS]]){
  const r=original[key];assert.ok(r,key+' found');
- assert.ok(inside(r,area),key+' stays inside its window: '+JSON.stringify(r));
- if(key!=='chat')assert.ok(covers(r,content),key+' covers its content: '+JSON.stringify(r));
+ assert.ok(near(r,area),key+' matches the user placement: '+JSON.stringify(r));
+ // OCR reads only the text area: inside the window, clear of icons, scrollbar and chat input, and covering every line.
+ const text=r.text||r;assert.ok(inside(text,area,r.text?0:2),key+' text area stays inside the window');
+ assert.ok(covers(text,content),key+' text area covers its content: '+JSON.stringify(text));
 }
-assert.ok(original.chat.h>=CHAT_TEXT.h*.95&&original.chat.w>=150,'chat area covers the visible messages');
+assert.ok(original.items.text.x>=578&&original.items.text.x+original.items.text.w<=740,'item icons and scrollbar excluded from OCR');
+assert.deepEqual(original.sale,{x:SOLD.x,y:SOLD.y,w:SOLD.w,h:SOLD.h},'sale snapshot is the Sold Items window');
+// The same placements at 150% UI scale (display scaling or a resized capture): the screenshot resized with Jimp's bilinear filter,
+// recreated here so the pixels match the recorded OCR.
+{const big=JSON.parse(fs.readFileSync(new URL('./fixtures/store-reference-150.ocr.json',import.meta.url),'utf8'));
+ const scaled=referenceImage.clone().resize({w:Math.round(referenceImage.bitmap.width*1.5),h:Math.round(referenceImage.bitmap.height*1.5),mode:'bilinearInterpolation'});
+ const r=locate(big,await framePixels(scaled,big.scale));
+ const at=(b,k=1.5)=>({x:Math.round(b.x*k),y:Math.round(b.y*k),w:Math.round(b.w*k),h:Math.round(b.h*k)});
+ for(const [key,area] of [['items',SOLD],['chat',CHAT],['balance',BALANCE]])assert.ok(r[key]&&near(r[key],at(area),3),key+' follows the UI scale: '+JSON.stringify(r[key])+' vs '+JSON.stringify(at(area)));
+ assert.ok(covers(r.items.text,at(SOLD_TEXT))&&covers(r.chat.text,at(CHAT_TEXT)),'scaled text areas cover their content');}
+// The user's live store (Trash), cropped from their annotated screenshot: Sold Items detached on the right, UI at ~0.78x and
+// blurred by resampling, "Buyer:" lines garbled and "CLOSE STORE" unread. Boxes are the user's green (mesos) and red (chat).
+{const live=JSON.parse(fs.readFileSync(new URL('./fixtures/store-live-small.ocr.json',import.meta.url),'utf8'));
+ const image=await Jimp.read(fileURLToPath(new URL('./fixtures/store-live-small.png',import.meta.url)));
+ const r=locate(live,await framePixels(image,live.scale)),edges=(a,b,slack)=>Math.abs(a.x-b.x)<=slack&&Math.abs(a.y-b.y)<=slack&&Math.abs(a.x+a.w-b.x-b.w)<=slack&&Math.abs(a.y+a.h-b.y-b.h)<=slack;
+ assert.equal(r.mode,'sold-items');
+ assert.ok(r.chat&&edges(r.chat,{x:189,y:120,w:200,h:199},10),'live chat matches the user placement: '+JSON.stringify(r.chat));
+ assert.ok(covers(r.chat.text,{x:195,y:139,w:150,h:146}),'live chat text area covers all messages');
+ assert.ok(r.balance&&edges(r.balance,{x:113,y:105,w:63,h:26},7)&&covers(r.balance,{x:146,y:115,w:30,h:9}),'live mesos matches the user placement: '+JSON.stringify(r.balance));
+ assert.ok(r.items&&r.items.y<=22&&covers(r.items.text,{x:449,y:38,w:90,h:170}),'live Sold Items starts at the first entry (Metal Koif): '+JSON.stringify(r.items));}
 assert.equal(original.total,undefined,'no Sales total invented');
 // Regions are in source pixels, so they map back onto a preview of any size (browser zoom, resized window).
 for(const [pw,ph]of [[779,487],[389.5,243.5],[1558,974],[1000,625]]){
@@ -34,20 +63,35 @@ for(const [pw,ph]of [[779,487],[389.5,243.5],[1558,974],[1000,625]]){
  assert.ok(Math.abs(back.x-r.x)<1e-6&&Math.abs(back.y-r.y)<1e-6,'round trip at preview '+pw);
 }
 
-// ---- Balance crop: "237,275" reads as "237.275" at 58-59% confidence in both passes ----
-const [b1,b2]=fx.crops.balance.reads;
-assert.equal(agreedNumber(b1,b2,parseTotal),237275,'two agreeing digit-group readings are accepted');
+// ---- Balance crop: "237,275", bicubic-upscaled (ocr-prep.mjs), three passes ----
+assert.equal(majorityNumber(fx.crops.balance.reads,parseTotal),237275,'agreeing digit-group readings are accepted');
+assert.ok(fx.crops.balance.reads.every(r=>r.confidence>=80),'smooth upscaling reads the digits confidently');
 assert.equal(agreedNumber({text:'237.275',confidence:58},{text:'237.215',confidence:58},parseTotal),null,'disagreeing passes rejected');
 assert.equal(agreedNumber({text:'237275',confidence:58},{text:'237275',confidence:58},parseTotal),null,'ungrouped low-confidence digits rejected');
 assert.equal(agreedNumber({text:'5',confidence:40},{text:'5',confidence:40},parseTotal),null);
+assert.equal(majorityNumber([{text:'246,309',confidence:69},{text:'258,809',confidence:90},{text:'258,809',confidence:88}],parseTotal),258809,'two of three passes decide');
+assert.equal(majorityNumber([{text:'256,809',confidence:70},{text:'246,309',confidence:69},{text:'258,809',confidence:88}],parseTotal),null,'no two passes agree');
 
 // ---- Sold Items crop ----
-const [i1,i2]=fx.crops.items.reads;
-const reading=chooseSoldReading(i1,i2);
-assert.deepEqual(reading.records.map(r=>[r.name,r.qty]),[['Ghost Costume',1],['Black Shoes of Death',1],['Ghost Suit',1],[parseSoldRecords(i1.text)[3].name,1]]);
-assert.deepEqual(reading.records.map(r=>r.agreed),[true,true,true,false],'"Scrall"/"Scroll" disagreement only distrusts that record');
+const reading=chooseSoldReading(...fx.crops.items.reads);
+assert.deepEqual(reading.records.map(r=>[r.name,r.buyer,r.qty]),[['Ghost Costume','porkboy',1],['Black Shoes of Death','MuleRook',1],['Ghost Suit','Ssr1',1],['Cape Weapon Def. Scroll...','Fuehrer',1]]);
+assert.ok(reading.complete&&reading.records.every(r=>r.agreed),'every record read the same way by at least two passes');
 assert.ok(reading.records[3].truncated,'"..." marks a cut-off name');
-assert.equal(reading.records[0].buyer,'porkhoy');
+// One-character OCR slips still agree; a different record does not.
+const slip=chooseSoldReading({text:'Cape Weapon Def. Scrall\nBuyer: Fuehrer\nNumber purchased: 1',confidence:80},{text:'Cape Weapon Def. Scroll\nBuyer: Fuehrer\nNumber purchased: 1',confidence:80});
+assert.ok(slip.records[0].agreed,'"Scrall"/"Scroll" is one record');
+const other=chooseSoldReading({text:'Ghost Suit\nBuyer: Ssr1\nNumber purchased: 1',confidence:80},{text:'Ghost Costume\nBuyer: Ssr1\nNumber purchased: 1',confidence:80});
+assert.deepEqual(other.records.map(r=>r.agreed),[false],'different items are not merged');
+assert.equal(chooseSoldReading({text:'Ghost Suit\nBuyer: Ssr1\nNumber purchased: 2',confidence:80},{text:'Ghost Suit\nBuyer: Ssr1\nNumber purchased: 1',confidence:80}).records[0].agreed,false,'quantities must match exactly');
+
+// ---- The user's live store (small, blurred UI): mesos and Sold Items as shown in the screenshot ----
+{const live=JSON.parse(fs.readFileSync(new URL('./fixtures/store-live-small.ocr.json',import.meta.url),'utf8'));
+ assert.equal(majorityNumber(live.crops.balance.reads,parseTotal),258809,'live mesos 258,809');
+ const sold=chooseSoldReading(...live.crops.items.reads),truth=[['Metal Koif','MYMYFem'],['Work Gloves','bobo8'],['Silver Wind Shoes','Cryru'],['Lemona','XiaoPaCai']];
+ assert.deepEqual(sold.records.map(r=>r.name),truth.map(t=>t[0]),'live item names exact');
+ assert.ok(sold.complete,'all live records trusted');
+ assert.ok(sold.records.every((r,i)=>sameName(r.buyer,truth[i][1])),'live buyers within OCR tolerance: '+sold.records.map(r=>r.buyer).join(', '));
+ assert.ok(chatVisitors(live.crops.chat.reads[0].text).filter(v=>['RosyHunter','Depredator09','Sandyyy','nomaster','Rath'].includes(v)).length>=10,'live chat names exact');}
 
 // ---- Chat crop ----
 const visitors=chatVisitors(fx.crops.chat.reads[0].text);
@@ -80,6 +124,9 @@ r=step(r.state,{balance:257334,records:sold});assert.equal(r.kind,'sale');assert
 assert.deepEqual([r.sales[0].unitPrice,r.sales[0].gross,r.sales[0].net,r.sales[0].fee],[20679,20679,20059,620]);
 s=r.state;assert.equal(s.initialBalance,237275,'starting balance never replaced');assert.equal(s.balanceRef,257334);
 assert.equal(step(s,{balance:257334,records:sold}).kind,'unchanged','no duplicate event for the same record');
+assert.equal(step(s,{balance:257334,records:[rec('Ghost Suit','Newbuyar'),...base]}).kind,'unchanged','a one-letter misread of a known record is not a new sale');
+assert.equal(listedPrice(prices,{name:'Ghost Sult'}),20679,'listed price found despite an OCR slip');
+assert.equal(listedPrice(parsePriceList('Blue Potion = 50\nBlue Lotion = 60'),{name:'Blue Motion'}),null,'ambiguous near matches are not guessed');
 // Unrelated transaction: mesos drop with no record (e.g. bought a potion).
 r=step(s,{balance:250000,records:sold});for(let i=0;i<3;i++)r=step(r.state,{balance:250000,records:sold});
 assert.equal(r.kind,'balance-change');assert.equal(r.balanceChange,-7334);s=r.state;assert.equal(s.initialBalance,237275);

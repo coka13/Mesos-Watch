@@ -1,5 +1,5 @@
 import {observe} from './detection.mjs';
-import {observeSoldItems} from './sold-items.mjs';
+import {observeSoldItems} from './sold-items.mjs?v=ms-5';
 
 export function createSession(id){return Object.freeze({id,initialBalance:null,balanceAtTotal:null,total:null,items:'',candidate:null});}
 const valid=n=>Number.isSafeInteger(n)&&n>=0;

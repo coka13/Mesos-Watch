@@ -182,3 +182,4 @@ console.log('megaphone service-role approval: ok');
  assert.equal((await as('authenticated',A,`select test from megaphone_queue where message='second test'`))[0].test,true);
  console.log('Test megaphones: code-gated, live for 10 minutes, rate-limited: ok');
 }
+

@@ -1,13 +1,14 @@
 import {numericInkBounds} from './numeric-region.mjs';
-import {detectStoreRegions,enhanceFramePixels,storeRegionsReady} from './auto-select.mjs?v=autoselect-4';
+import {ocrImage,TEXT_PASSES,NUMBER_PASSES} from './ocr-prep.mjs?v=prep-1';
+import {detectStoreRegions,enhanceFramePixels,storeRegionsReady} from './auto-select.mjs?v=autoselect-7';
 import {deliverDiscord} from './discord-delivery.mjs';
 import {sourcePoint,validRegion} from './capture-geometry.mjs';
 import {observeChat} from './chat.mjs?v=reader-4';
 import {discordBody,saleEmbed} from './notifications.mjs?v=ms-4';
-import {createSession,observeStore} from './store-session.mjs?v=ms-4';
-import {chooseSoldReading,chatVisitors,parsePriceList,agreedNumber,STORE_FEE_RATE} from './sold-items.mjs?v=ms-4';
+import {createSession,observeStore} from './store-session.mjs?v=ms-5';
+import {chooseSoldReading,chatVisitors,parsePriceList,majorityNumber,STORE_FEE_RATE} from './sold-items.mjs?v=ms-5';
 import {parseTotal,chooseItemReading} from './detection.mjs?v=reader-4';
-import {tsvWords,locateRegions,frameScale,coinScorer} from './locate.mjs?v=autoselect-4';
+import {tsvWords,locateRegions,frameScale,coinScorer} from './locate.mjs?v=autoselect-7';
 import {reportObservations,configured as boardConfigured,matchNames,iconUrl} from './api.mjs?v=ms-2';
 const $=id=>document.getElementById(id);
 const video=$('video'),preview=$('preview'),ctx=preview.getContext('2d');
@@ -26,7 +27,7 @@ for(const id of ['mystore-name','listed-prices']){const key='mw-'+id;try{$(id).v
 async function readChat(w){
  if(!regions.chat)return[];
  await w.setParameters({tessedit_pageseg_mode:'6',tessedit_char_whitelist:''});
- const read=await w.recognize(prepare(crop('chat',4)));
+ const read=await w.recognize(prepare(crop('chat',1,true)));
  lastChat={text:read.data.text,confidence:read.data.confidence,picture:crop('chat')};
  const visitors=read.data.confidence>=50?chatVisitors(read.data.text):[];
  lastReads.chat=visitors.length+' visitor(s) · '+Math.round(read.data.confidence)+'%';
@@ -54,7 +55,7 @@ async function recordVerified(result,r){
 async function sendEmbed(embed,picture){const url=validWebhook();const blob=picture?await new Promise(res=>picture.toBlob(b=>res(b),'image/png')):null;await deliverDiscord(url,discordBody('',blob,'sold-items.png',[embed]));}
 video.addEventListener('resize',()=>{if(!stream)return;stop('Capture resolution changed. Re-detecting regions; review them before restarting.');regions={};layoutSig=null;debugCapture({failure:'Source resolution changed'});if(!busy&&!checking)autoDetect();});
 const baselineNote=document.createElement('p');baselineNote.className='hint';baselineNote.id='session-baseline';baselineNote.textContent='Session starting mesos: not set';$('balance-note').after(baselineNote);
-const meso=(size=14)=>{const s=document.createElement('span');s.className='meso';s.style.setProperty('--m',size+'px');s.title='mesos';const i=document.createElement('img');i.src='meso.png?v=ms-2';i.alt='';i.width=i.height=size;i.decoding='async';s.append(i);return s;};
+const meso=(size=14)=>{const s=document.createElement('span');s.className='meso';s.style.setProperty('--m',size+'px');s.title='mesos';const i=document.createElement('img');i.src='meso.png?v=real-1';i.alt='';i.width=i.height=size;i.decoding='async';s.append(i);return s;};
 const mesoAmt=(text,size=14)=>{const s=document.createElement('span');s.className='meso-amt';s.append(meso(size),document.createTextNode(String(text)));return s;};
 function status(text,error=false){$('status').textContent=text;$('status').classList.toggle('error',error);}
 function controls(){
@@ -77,7 +78,7 @@ $('test').onclick=async()=>{try{$('test').disabled=true;await send('Mesos-Watch 
 function stop(message='Watching stopped. Restart to establish a fresh baseline.') {watching=false;clearTimeout(timer);timer=null;$('badge').classList.remove('live');$('badge').replaceChildren(Object.assign(document.createElement('span'),{className:'dot'}),document.createTextNode(' Not watching'));controls();status(message);}
 $('stop').onclick=()=>stop();
 $('connect').onclick=async()=>{try{if(!navigator.mediaDevices?.getDisplayMedia)throw Error('Screen sharing isn’t available here. Open this page in desktop Chrome or Edge.');if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}stream=await navigator.mediaDevices.getDisplayMedia({video:{frameRate:2},audio:false});video.srcObject=stream;await video.play();regions={};mode=null;stream.getVideoTracks()[0].addEventListener('ended',()=>{stop('Game sharing ended. Reconnect your window to continue.');stream=null;video.srcObject=null;regions={};$('preview').hidden=true;$('capture-empty').hidden=false;controls();window.dispatchEvent(new Event('mesoswatch:capture-ended'));});$('preview').hidden=false;$('capture-empty').hidden=true;$('source-note').textContent='Window connected';window.dispatchEvent(new Event('mesoswatch:capture-started'));cancelAnimationFrame(frame);controls();draw();await autoDetect();}catch(e){status(e.name==='NotAllowedError'?'Window sharing was cancelled. You can try again.':e.message,true);controls();}};
-function draw(){if(!stream)return;const w=video.videoWidth,h=video.videoHeight;if(w&&h&&document.body.dataset.view==='store'&&!document.hidden&&$('capture-details').open){preview.width=w;preview.height=h;ctx.drawImage(video,0,0);for(const [name,r]of Object.entries(regions)){if(typeof r!=='object'||!Number.isFinite(r?.x))continue;ctx.strokeStyle=name==='chat'?'#c58be5':name==='sale'?'#e58a81':name==='balance'?'#7ba952':name==='total'?'#e8a53b':'#6aa8d1';ctx.lineWidth=Math.max(2,w/400);ctx.strokeRect(r.x,r.y,r.w,r.h);ctx.fillStyle=ctx.strokeStyle;ctx.font=`${Math.max(12,w/100)}px sans-serif`;if(typeof r!=='object'||!Number.isFinite(r?.x))continue;ctx.fillText((name==='chat'?'SHOP CHAT':name==='sale'?'SALE SNAPSHOT':name==='balance'?'MY MESOS':name==='total'?'TOTAL':'SOLD ITEMS')+(debugOverlay?` ${r.x},${r.y} ${r.w}×${r.h}`+(lastReads[name]?' · '+lastReads[name]:''):''),r.x+4,Math.max(15,r.y-5));}if(drag){ctx.strokeStyle='#fff';ctx.lineWidth=3;ctx.strokeRect(drag.x,drag.y,drag.endX-drag.x,drag.endY-drag.y);}}frame=requestAnimationFrame(draw);}
+function draw(){if(!stream)return;const w=video.videoWidth,h=video.videoHeight;if(w&&h&&document.body.dataset.view==='store'&&!document.hidden&&$('capture-details').open){preview.width=w;preview.height=h;ctx.drawImage(video,0,0);for(const [name,r]of Object.entries(regions)){if(typeof r!=='object'||!Number.isFinite(r?.x))continue;if(name==='sale'&&regions.items&&['x','y','w','h'].every(k=>r[k]===regions.items[k]))continue;ctx.strokeStyle=name==='chat'?'#c58be5':name==='sale'?'#e58a81':name==='balance'?'#7ba952':name==='total'?'#e8a53b':'#6aa8d1';ctx.lineWidth=Math.max(2,w/400);ctx.strokeRect(r.x,r.y,r.w,r.h);ctx.fillStyle=ctx.strokeStyle;ctx.font=`${Math.max(12,w/100)}px sans-serif`;if(typeof r!=='object'||!Number.isFinite(r?.x))continue;ctx.fillText((name==='chat'?'SHOP CHAT':name==='sale'?'SALE SNAPSHOT':name==='balance'?'MY MESOS':name==='total'?'TOTAL':'SOLD ITEMS')+(debugOverlay?` ${r.x},${r.y} ${r.w}×${r.h}`+(lastReads[name]?' · '+lastReads[name]:''):''),r.x+4,Math.max(15,r.y-5));}if(drag){ctx.strokeStyle='#fff';ctx.lineWidth=3;ctx.strokeRect(drag.x,drag.y,drag.endX-drag.x,drag.endY-drag.y);}}frame=requestAnimationFrame(draw);}
 function point(e){const b=preview.getBoundingClientRect();return sourcePoint({x:e.clientX,y:e.clientY},{x:b.left,y:b.top,width:b.width,height:b.height},{width:preview.width,height:preview.height});}
 function selectRegion(name){
  mode=name;$('capture-details').open=true;$('capture-details').parentElement.closest('details').open=true;
@@ -100,29 +101,33 @@ preview.onpointerup=e=>{
  drag=null;mode=null;controls();
 };
 preview.onpointercancel=()=>{drag=null;};
-function crop(name,scale=1){const r=regions[name];if(!validRegion(r,video.videoWidth,video.videoHeight))throw Error('Capture area moved outside the source. Run Auto Select again.');if(!r||!stream||!video.videoWidth)throw Error('Reconnect and select both reading areas.');const c=document.createElement('canvas');c.width=r.w*scale;c.height=r.h*scale;const g=c.getContext('2d');g.imageSmoothingEnabled=false;g.drawImage(video,r.x,r.y,r.w,r.h,0,0,c.width,c.height);return c;}
-function prepare(image,threshold=false){const c=document.createElement('canvas');c.width=image.width+40;c.height=image.height+40;const g=c.getContext('2d',{willReadFrequently:true});g.fillStyle='#fff';g.fillRect(0,0,c.width,c.height);g.drawImage(image,20,20);const data=g.getImageData(20,20,image.width,image.height);for(let p=0;p<data.data.length;p+=4){let v=.299*data.data[p]+.587*data.data[p+1]+.114*data.data[p+2];v=threshold?(v<165?0:255):Math.max(0,Math.min(255,(v-128)*1.4+128));data.data[p]=data.data[p+1]=data.data[p+2]=v;}g.putImageData(data,20,20);return c;}
+// OCR reads a region's text area when Auto Select found one; pictures and the preview use the whole window.
+function crop(name,scale=1,text=false){const r=text&&regions[name]?.text||regions[name];if(!validRegion(r,video.videoWidth,video.videoHeight))throw Error('Capture area moved outside the source. Run Auto Select again.');if(!r||!stream||!video.videoWidth)throw Error('Reconnect and select both reading areas.');const c=document.createElement('canvas');c.width=r.w*scale;c.height=r.h*scale;const g=c.getContext('2d');g.imageSmoothingEnabled=false;g.drawImage(video,r.x,r.y,r.w,r.h,0,0,c.width,c.height);return c;}
+// OCR input from a 1:1 crop: bicubic upscale, optionally binarized, in a white margin (ocr-prep.mjs, shared with the tests).
+function prepare(image,options=TEXT_PASSES[0]){const img=ocrImage(image.getContext('2d',{willReadFrequently:true}).getImageData(0,0,image.width,image.height),options);const c=document.createElement('canvas');c.width=img.width;c.height=img.height;c.getContext('2d').putImageData(new ImageData(img.data,img.width,img.height),0,0);return c;}
+async function readAll(w,image,passes){const reads=[];for(const options of passes)reads.push((await w.recognize(prepare(image,options))).data);return reads;}
+const middle=reads=>reads.map(r=>r.confidence??0).sort((a,b)=>b-a)[Math.min(1,reads.length-1)];
 function showCrop(id,image){const canvas=$(id);canvas.hidden=false;canvas.width=image.width;canvas.height=image.height;canvas.getContext('2d').drawImage(image,0,0);}
 async function getWorker(){if(worker)return worker;if(!workerPromise){workerPromise=(async()=>{status('Loading the OCR engine for the first reading…');if(!window.Tesseract){await new Promise((resolve,reject)=>{const s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/tesseract.js@6.0.1/dist/tesseract.min.js';s.onload=resolve;s.onerror=()=>{s.remove();reject(Error('Could not load OCR. Check your connection and retry.'));};document.head.append(s);});}worker=await window.Tesseract.createWorker('eng',1,{logger:()=>{}});await worker.setParameters({tessedit_pageseg_mode:'6'});return worker;})();}try{return await workerPromise;}catch(e){workerPromise=null;throw e;}}
 async function reading(){
- const itemsImage=crop('items',4),picture=crop('items');
- showCrop('items-crop',crop('items',2));
+ const itemsImage=crop('items',1,true),picture=crop('items');
+ showCrop('items-crop',crop('items',2,true));
  const w=await getWorker();let t={data:{text:'',confidence:0}},t2=t,a=null,b=null,total=null;
- if(regions.total){const totalImage=crop('total',4);showCrop('total-crop',crop('total',2));await w.setParameters({tessedit_pageseg_mode:'7',tessedit_char_whitelist:'0123456789, .'});t=await w.recognize(prepare(totalImage));t2=await w.recognize(prepare(totalImage,true));a=parseTotal(t.data.text);b=parseTotal(t2.data.text);total=a!==null&&a===b?a:null;}
+ if(regions.total){const totalImage=crop('total');showCrop('total-crop',crop('total',2));await w.setParameters({tessedit_pageseg_mode:'7',tessedit_char_whitelist:'0123456789, .'});const reads=await readAll(w,totalImage,NUMBER_PASSES);t={data:reads[0]};t2={data:reads[1]};a=parseTotal(t.data.text);b=parseTotal(t2.data.text);total=majorityNumber(reads,parseTotal);}
  await w.setParameters({tessedit_pageseg_mode:'6',tessedit_char_whitelist:''});
- const i=await w.recognize(prepare(itemsImage)),i2=await w.recognize(prepare(itemsImage,true));
+ const itemReads=await readAll(w,itemsImage,regions.mode==='sold-items'?TEXT_PASSES:TEXT_PASSES.slice(0,2)),[i,i2]=itemReads.map(data=>({data}));
  const balance=await readBalance(w),visitors=await readChat(w);
  if(regions.mode==='sold-items'){
-  const sold=chooseSoldReading(i.data,i2.data);lastReads.items=sold.records.length+' records · '+Math.round(sold.confidence)+'%';
+  const sold=chooseSoldReading(...itemReads);lastReads.items=sold.records.length+' records · '+Math.round(sold.confidence)+'%';
   $('total-reading').textContent='Not shown in this layout';
   $('items-reading').textContent=sold.display||'No Sold Items records found';
   $('items-reading').classList.toggle('uncertain',!sold.complete);
-  $('item-quality').textContent=sold.complete?'Both readings agree on every record.':'Records the two readings disagree on are shown, but they cannot verify a sale.';
+  $('item-quality').textContent=sold.complete?'At least two readings agree on every record.':'Records the readings disagree on are shown, but they cannot verify a sale.';
   $('item-quality').classList.toggle('uncertain',!sold.complete);
-  $('raw-ocr').textContent='Sold Items pass 1:\n'+i.data.text.trim()+'\n\nSold Items pass 2:\n'+i2.data.text.trim()+(lastChat?'\n\nShop chat:\n'+lastChat.text.trim():'');
+  $('raw-ocr').textContent=itemReads.map((r,n)=>'Sold Items pass '+(n+1)+':\n'+r.text.trim()).join('\n\n')+(lastChat?'\n\nShop chat:\n'+lastChat.text.trim():'');
   $('ocr-quality').textContent='Sold Items confidence: '+Math.round(sold.confidence)+'% · '+(regions.chat?visitors.length+' visitor name(s) in chat':'shop chat not selected');
   debugCapture({balance,records:sold.records,visitors,confidence:sold.confidence});
-  return{mode:'sold-items',balance,records:sold.records,confidence:sold.confidence,visitors,prices:parsePriceList($('listed-prices').value),feeRate:STORE_FEE_RATE,picture,raw:i.data.text+'\n'+i2.data.text};
+  return{mode:'sold-items',balance,records:sold.records,confidence:sold.confidence,visitors,prices:parsePriceList($('listed-prices').value),feeRate:STORE_FEE_RATE,picture,raw:itemReads.map(r=>r.text).join('\n')};
  }
  const chosen=chooseItemReading(i.data,i2.data);
  $('total-reading').textContent=regions.mode==='sold-items'?'Not shown in this layout':total===null?'Reselect total':fmt(total)+' mesos';
@@ -178,7 +183,7 @@ async function checkChat(){
  if(!regions.chat)return;
  let picture,text;
  if(lastChat){picture=lastChat.picture;text={data:lastChat};lastChat=null;}
- else{picture=crop('chat');const w=await getWorker();await w.setParameters({tessedit_pageseg_mode:'6',tessedit_char_whitelist:''});text=await w.recognize(prepare(crop('chat',4)));}
+ else{picture=crop('chat');const w=await getWorker();await w.setParameters({tessedit_pageseg_mode:'6',tessedit_char_whitelist:''});text=await w.recognize(prepare(crop('chat',1,true)));}
  if(!watching)return;
  const result=observeChat(chatState,{text:text.data.text,confidence:text.data.confidence});chatState=result.state;
  if(result.kind==='messages'){
@@ -206,9 +211,9 @@ async function readBalance(w){
  if(!regions.balance)return null;
  showCrop('balance-crop',crop('balance',2));
  await w.setParameters({tessedit_pageseg_mode:'7',tessedit_char_whitelist:'0123456789, .'});
- let source=crop('balance',4);const ink=numericInkBounds(source.getContext('2d',{willReadFrequently:true}).getImageData(0,0,source.width,source.height),4);if(ink){const tight=document.createElement('canvas');tight.width=ink.w;tight.height=ink.h;tight.getContext('2d').drawImage(source,ink.x,ink.y,ink.w,ink.h,0,0,ink.w,ink.h);source=tight;}const a=await w.recognize(prepare(source)),b=await w.recognize(prepare(source,true));
- const first=agreedNumber(a.data,b.data,parseTotal),reliable=first!==null;
- lastReads.balance=(reliable?fmt(first):'unclear')+' · '+Math.round(Math.min(a.data.confidence,b.data.confidence))+'%';
+ let source=crop('balance');const ink=numericInkBounds(source.getContext('2d',{willReadFrequently:true}).getImageData(0,0,source.width,source.height),1);if(ink){const tight=document.createElement('canvas');tight.width=ink.w;tight.height=ink.h;tight.getContext('2d').drawImage(source,ink.x,ink.y,ink.w,ink.h,0,0,ink.w,ink.h);source=tight;}
+ const reads=await readAll(w,source,NUMBER_PASSES),first=majorityNumber(reads,parseTotal),reliable=first!==null;
+ lastReads.balance=(reliable?fmt(first):'unclear')+' · '+Math.round(middle(reads))+'%';
  $('balance-reading').replaceChildren(reliable?mesoAmt(fmt(first),15):document.createTextNode('Unclear'));
  $('balance-note').textContent=reliable?'Personal mesos · checked '+new Date().toLocaleTimeString():'Balance unreadable. Keep inventory visible or reselect the digits.';
  return reliable?first:null;
@@ -224,7 +229,7 @@ async function autoDetect(background=false){
   c.width=Math.round(video.videoWidth*scale);c.height=Math.round(video.videoHeight*scale);
   const g=c.getContext('2d',{willReadFrequently:true});g.imageSmoothingEnabled=false;g.drawImage(video,0,0,c.width,c.height);
   const w=await getWorker(),pixels=g.getImageData(0,0,c.width,c.height),coinScore=coinScorer(pixels,scale);
-  const detection=await detectStoreRegions({width:c.width,height:c.height,scale,sourceWidth,sourceHeight,coinScore,
+  const detection=await detectStoreRegions({width:c.width,height:c.height,scale,sourceWidth,sourceHeight,coinScore,pixels,
    isCurrent:()=>stream===captureStream&&video.videoWidth===sourceWidth&&video.videoHeight===sourceHeight,
    onProgress:({attempt,pass})=>status('Finding store regions · OCR pass '+attempt+'/3 ('+pass+')…'),
    recognize:async pass=>{let image=c;if(pass.name!=='original'){image=document.createElement('canvas');image.width=c.width;image.height=c.height;const imageContext=image.getContext('2d'),enhanced=imageContext.createImageData(c.width,c.height);enhanced.data.set(enhanceFramePixels(pixels.data,pass.name==='threshold'));imageContext.putImageData(enhanced,0,0);}await w.setParameters({tessedit_pageseg_mode:pass.mode,tessedit_char_whitelist:''});return w.recognize(image,{},{text:true,tsv:true});}

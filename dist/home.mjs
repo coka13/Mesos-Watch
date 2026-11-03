@@ -29,7 +29,7 @@ export async function loadStores(){
  const list=$('home-stores');if(!list)return;
  if(!configured()){list.replaceChildren(el('li',{className:'empty',textContent:'Player stores appear once the community database is connected.'}));return;}
  try{const stores=(await publicStores($('world')?.value||'')).slice(0,6);
-  list.replaceChildren(...(stores.length?stores.map(s=>el('li',{},el('a',{href:'#stores/'+encodeURIComponent(s.id),textContent:s.name}),el('small',{textContent:[s.character_name,s.world,s.channel?'Ch '+s.channel:'',s.room,'updated '+ago(s.updated_at)].filter(Boolean).join(' · ')}))):[el('li',{className:'empty',textContent:'No player stores published yet. Publish yours under Player Stores.'})]));
+  list.replaceChildren(...(stores.length?stores.map(s=>el('li',{},el('a',{href:'#stores/'+encodeURIComponent(s.id),textContent:s.name}),el('small',{textContent:[s.character_name,s.world,s.channel?'Ch '+s.channel:'',s.room,'updated '+ago(s.updated_at)].filter(Boolean).join(' · ')}))):[el('li',{className:'empty',textContent:'No player stores published yet. Check back as the community grows.'})]));
  }catch(e){list.replaceChildren(el('li',{className:'empty',textContent:/not set up|PGRST|does not exist|schema cache/i.test(e.message)?'Player stores open once the site owner applies the player-store migration.':e.message}));}
 }
 function refresh(){if(document.body.dataset.view==='checker'&&!$('home')?.hidden){loadStats();loadStores();}}

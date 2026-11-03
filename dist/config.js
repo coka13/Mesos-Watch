@@ -8,6 +8,9 @@ window.MESOSWATCH_CONFIG = {
   // The anon key is meant to be public; access is limited by supabase/migrations. Never put the service_role key here.
   // worlds: optional list of game worlds for the picker, e.g. ['Bera', 'Scania']. Leave empty for one shared board.
   prices: { supabaseUrl: 'https://nnfnlqgdzfcxtrnjpyzn.supabase.co', supabaseAnonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5uZm5scWdkemZjeHRybmpweXpuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTM1NDA2MjgsImV4cCI6MjEwOTExNjYyOH0.Bax0yRL_PZYYbTjF-_DEoJDB4Iy2rntNaDKXVbHmH6E', worlds: [] },
+  // Payments for megaphones, sponsor slots and donations: 'paypal' and/or 'crypto' (NOWPayments). Keys live in Supabase secrets,
+  // never here. stripe: true shows the Stripe button too (Stripe does not accept Israeli accounts).
+  payments: { providers: ['paypal', 'crypto'], stripe: false },
   // Item pictures by game item id (MapleStory Classic World data from OSMS Data Explorer). See SETUP.md before changing the source.
   items: { iconBase: 'https://osmsdataexplorer.com/data/current/images/items/' }
 };

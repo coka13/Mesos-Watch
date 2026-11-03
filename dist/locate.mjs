@@ -36,7 +36,51 @@ function amount(w){
  const per=w.w/Math.max(1,w.text.length),lead=w.text.indexOf(m[1]);
  return{...w,text:m[1],x:w.x+lead*per,w:m[1].length*per,value};}
 
-export function locateRegions(words,width,height,scale=1,coinScore=()=>0){
+// Classic store windows in unscaled (1:1 UI) pixels, measured on the reference screenshot. Sold Items is relative to the first
+// visible "Number purchased" line; the chat and balance fallbacks to the Close Store label. `text` is the part OCR reads.
+const SOLD_WINDOW={x:-45,y:-62,w:226,h:266,text:{x:41,y:24,w:156,h:226}};
+const CHAT_WINDOW={x:84,y:39,w:262,h:222,text:{x:2,y:2,w:258,h:212}};
+const BALANCE_FIELD={x:-25,y:12,w:96,h:26};
+// Distance between consecutive Sold Items entries, and offsets of an entry's name and buyer lines above its quantity line.
+// The observed spacing gives the UI scale (display scaling, resized capture).
+const ENTRY_PITCH=58,ENTRY_LINES=[35,18],QUANTITY_TEXT_H=11;
+const QUANTITY=/^[nhm][a-z]{3,6}[\s.,:;]*p[a-z]{1,3}[cr]/i;
+const CHAT_MESSAGE=l=>/\b[hn]a[sgz]\b/i.test(l.text)&&/ent|nt[ae]r|r[oa]{1,2}m|\ble[ft]|\blef|efi|lett|lgn/i.test(l.text);
+
+// White areas in the scaled frame's RGBA pixels. Text never touches an area's margins, so a row belongs to the area when both
+// margins are white; thin separator lines (up to 3 source pixels) are crossed.
+const isWhite=({data,width},x,y)=>{const p=(Math.round(y)*width+Math.round(x))*4;return data[p]>248&&data[p+1]>248&&data[p+2]>248;};  // window frames are near-white (~245)
+function whiteShare(px,x0,y0,x1,y1){let n=0,t=0;const sx=x1>x0?2:1,sy=y1>y0?2:1;for(let y=y0;y<=y1;y+=sy)for(let x=x0;x<=x1;x+=sx){t++;if(isWhite(px,x,y))n++;}return t?n/t:0;}
+function extend(start,step,limit,inside,gap){let edge=start,miss=0;for(let v=start;step>0?v<=limit:v>=limit;v+=step){if(inside(v)){edge=v;miss=0;}else if(++miss>gap)break;}return edge;}
+// The shop chat: the white message area found from the left-aligned "has entered / has left" lines, plus the input line below it.
+function findChat(px,lines,s,ui,limitX){
+ const msgs=lines.filter(l=>CHAT_MESSAGE(l)&&l.x+l.w<limitX);if(msgs.length<3)return null;
+ const xs=msgs.map(l=>l.x).sort((a,b)=>a-b),mx=xs[Math.floor(xs.length/2)],col=msgs.filter(l=>Math.abs(l.x-mx)<4*ui);if(col.length<3)return null;
+ const top=Math.min(...col.map(l=>l.y)),bottom=Math.max(...col.map(l=>l.y+l.h)),right=Math.max(...col.map(l=>l.x+l.w));
+ const W=px.width-1,H=px.height-1,column=x=>whiteShare(px,x,top,x,bottom)>=.6;
+ const L=extend(Math.floor(mx-2*ui),-1,0,column,0),R=extend(Math.ceil(right+1),1,W,column,0);
+ if(R-L<100*ui||L>mx-ui)return null;
+ const m=Math.max(1,Math.round(2*ui)),row=y=>whiteShare(px,L,y,L+m,y)>=.8&&whiteShare(px,R-m,y,R,y)>=.8,gap=3*s;
+ const T=extend(Math.floor(top),-1,0,row,gap),B=extend(Math.ceil(bottom),1,H,row,gap);
+ // The input line: past the frame under the messages (blurred captures leave a near-white row first), rows white along the left
+ // part for at least 6 UI pixels.
+ const input=y=>whiteShare(px,L+m,y,L+(R-L)*.6,y)>=.9;let y=B+1,IB=B;
+ while(y<=H&&y<B+24*ui){while(y<=H&&!input(y))y++;const end=extend(y,1,H,input,0);if(y<B+24*ui&&end-y+1>=6*ui){IB=end;break;}y=end+1;}
+ return{x:L,y:T,w:R-L+1,h:B-T+1,bottom:IB};
+}
+// The personal mesos field: a white box just above and left of the chat; its left part is empty (digits are right-aligned).
+function findField(px,chat,ui){
+ const cx=chat.x-80*ui,cy=chat.y-16*ui;if(cx<0||cy<0||!isWhite(px,cx,cy))return null;
+ const col=y=>isWhite(px,cx,y),T=extend(Math.floor(cy),-1,0,col,0),B=extend(Math.ceil(cy),1,px.height-1,col,0);
+ const ry=T+1,row=x=>isWhite(px,x,ry),L=extend(Math.floor(cx),-1,0,row,0),R=extend(Math.ceil(cx),1,chat.x,row,0);
+ const w=R-L+1,h=B-T+1;
+ return w>=60*ui&&w<=130*ui&&h>=8*ui&&h<=32*ui&&R<chat.x?{x:L,y:T,w,h}:null;
+}
+
+// `pixels` (optional): RGBA of the same scaled frame the words come from; it lets the chat and balance follow the drawn windows.
+export function locateRegions(words,width,height,scale=1,coinScore=()=>0,pixels=null){
+ let ui=scale;
+ const box=(o,a)=>({x:o.x+a.x*ui,y:o.y+a.y*ui,w:a.w*ui,h:a.h*ui}),inset=box;
  if(!Number.isFinite(scale)||scale<=0||!Number.isFinite(width)||!Number.isFinite(height)||width<=0||height<=0)return{};
  // OCR engines sometimes return several label words in one word box. Split them with proportional geometry.
  words=words.flatMap(w=>{const matches=[...String(w.text||'').matchAll(/\S+/g)];return matches.length<=1?[w]:matches.map(m=>({...w,text:m[0],x:w.x+w.w*m.index/w.text.length,w:w.w*m[0].length/w.text.length}));});
@@ -78,18 +122,24 @@ export function locateRegions(words,width,height,scale=1,coinScore=()=>0){
  // Some Classic shop layouts have a scrolling Sold Items panel with no cumulative Sales total.
  // Locate repeated Buyer / Number purchased records independently; never substitute the personal balance for Sales.
  if(!totalLabel&&!result.items){
-  const entries=[];
-  for(const buyer of lines.filter(l=>/^buyer\s*[:;]/i.test(l.text))){
-   const quantity=lines.find(l=>/^(?:number|numher|murnber|humber)\s*purchased\s*[:;]?\s*\d+\b/i.test(l.text)&&l.y>buyer.y&&l.y-buyer.y<buyer.h*3&&Math.abs(l.x-buyer.x)<buyer.h*2);
-   const name=lines.filter(l=>l.y<buyer.y&&buyer.y-l.y<buyer.h*2.5&&Math.abs(l.x-buyer.x)<buyer.h*2&&!/buyer|purchased|total|store/i.test(l.text)).sort((a,b)=>b.y-a.y)[0];
-   if(quantity&&name)entries.push({buyer,quantity,name});
-  }
-  const groups=[];for(const entry of entries){const group=groups.find(g=>Math.abs(g[0].buyer.x-entry.buyer.x)<entry.buyer.h*2);if(group)group.push(entry);else groups.push([entry]);}
+  // Anchored on "Number purchased" lines, which OCR reads far more reliably than buyer names in this small font.
+  const groups=[];for(const q of lines.filter(l=>QUANTITY.test(l.text)).sort((a,b)=>a.y-b.y)){const g=groups.find(g=>Math.abs(g[0].x-q.x)<q.h*1.5);if(g)g.push(q);else groups.push([q]);}
   const candidates=groups.filter(g=>g.length>=2);
-  if(candidates.length===1){const entries=candidates[0],text=entries.flatMap(e=>[e.name,e.buyer,e.quantity]),bounds=union(text);
-   result.items=rect({x:bounds.x-4*scale,y:bounds.y-3*scale,w:bounds.w+8*scale,h:bounds.h+6*scale});
-   result.sale=rect({x:bounds.x-40*scale,y:bounds.y-3*scale,w:bounds.w+44*scale,h:bounds.h+6*scale});
-   result.mode='sold-items';shop={x:bounds.x-40*scale,y:bounds.y-3*scale,w:bounds.w+44*scale,h:bounds.h+6*scale};
+  if(candidates.length===1){const qs=candidates[0],gaps=qs.slice(1).map((q,i)=>q.y-qs[i].y).sort((a,b)=>a-b),hs=qs.map(q=>q.h).sort((a,b)=>a-b);
+   let pitch=gaps[Math.floor((gaps.length-1)/2)];
+   // A missing entry doubles a gap; the text height tells one entry from two.
+   const k=Math.max(1,Math.round(pitch/ENTRY_PITCH/(hs[Math.floor(hs.length/2)]/QUANTITY_TEXT_H)));pitch/=k;
+   const u=pitch/ENTRY_PITCH;
+   if(u>=.6*scale&&u<=4*scale&&gaps.every(g=>Math.abs(g/pitch-Math.round(g/pitch))<.15)){
+    // Rows are whole entries apart; snap near-1:1 readings so OCR jitter does not move the boxes.
+    ui=Math.abs(u/scale-1)<.04?scale:u;
+    const qx=Math.min(...qs.map(q=>q.x));let first=qs[0].y;
+    // The first entry's own quantity line may be unread: its name or buyer line above still marks the top entry.
+    if(lines.some(l=>Math.abs(l.x-qx)<4*ui&&ENTRY_LINES.some(o=>Math.abs(first-l.y-pitch-o*ui)<5*ui)))first-=pitch;
+    const panel=box({x:qx,y:first},SOLD_WINDOW);
+    result.items={...rect(panel),text:rect(inset(panel,SOLD_WINDOW.text))};
+    result.sale=rect(panel);result.mode='sold-items';shop=panel;
+   }
   }
  }
  const inventory=lines.find(l=>/\binventory\b/i.test(l.text));
@@ -99,18 +149,31 @@ export function locateRegions(words,width,height,scale=1,coinScore=()=>0){
  const digits=w=>parseTotal(w.text.replace(/^[^\d]+|[^\d]+$/g,''));
  const inInventory=w=>!!inventory&&w.y>inventory.y&&w.y<inventory.y+450*scale&&Math.abs(w.x-inventory.x)<230*scale;
  const inventoryMesos=w=>inInventory(w)&&words.some(label=>/^mesos?[:;]?$/i.test(label.text)&&label.x+label.w<=w.x&&w.x-label.x-label.w<150*scale&&Math.abs(label.y-w.y)<Math.max(label.h,w.h)*.6);
- const close=lines.find(l=>/^close?store$/.test(fold(l.text).replace(/[^a-z]/g,'')));
+ // "CLOSE STORE" is often misread when scaled ("ELOSESTORE", "CELOSE.STORE", "wELOSE. STORES", "CLOSELSTORE"); the box starts at the matched C.
+ const close=(()=>{for(const l of lines){const t=fold(l.text),m=t.match(/c?[ce]lose?[^a-z]{0,2}l?[^a-z]{0,2}store/);
+  if(m&&t.replace(/[^a-z]/g,'').length<=m[0].replace(/[^a-z]/g,'').length+3){const per=l.w/t.length;return{...l,x:l.x+m.index*per,w:m[0].length*per};}}return null;})();
  const controls=close&&(result.mode==='sold-items'||lines.some(l=>['openstore','solditems'].includes(fold(l.text).replace(/[^a-z]/g,''))&&l.y<close.y&&close.y-l.y<100*scale&&Math.abs(l.x-close.x)<70*scale));
- const controlMoney=controls?words.map(amount).filter(w=>w&&w.confidence>=50&&w.x>=close.x-50*scale&&w.x+w.w<=close.x+120*scale&&w.y>=close.y+close.h*.6&&w.y<close.y+close.h+28*scale):[];
+ const controlMoney=controls?words.map(amount).filter(w=>w&&w.confidence>=50&&w.x>=close.x-50*ui&&w.x+w.w<=close.x+120*ui&&w.y>=close.y+close.h*.6&&w.y<close.y+close.h+28*ui):[];
  const money=words.filter(w=>digits(w)!==null&&w.w>=w.h*.8&&(!followedByMesos(w)||inInventory(w))&&(!shop||w.x<shop.x||w.x>shop.x+shop.w||w.y<shop.y||w.y>shop.y+shop.h)).filter(w=>!inventory||(w.y>inventory.y&&w.y<inventory.y+450*scale&&Math.abs(w.x-inventory.x)<230*scale)).map(w=>({word:w,score:inventoryMesos(w)?1:coinScore(w)})).filter(c=>c.score>=.025).sort((a,b)=>b.score-a.score);
  // Never choose between multiple money-looking fields without a clear winner.
  if(money.length===1||(money.length>1&&money[0].score>=money[1].score*2.5)){const w=money[0].word;result.balance=rect({x:w.x-2*scale,y:w.y-2*scale,w:w.w+4*scale,h:w.h+4*scale});}
- if(controls&&controlMoney.length===0){result.balance=rect({x:close.x-25*scale,y:close.y+close.h+8*scale,w:close.w+35*scale,h:Math.max(close.h*3,22*scale)});result.balanceEstimated=true;}
- if(controls&&result.mode==='sold-items'){
-  const messages=lines.filter(l=>/\bhas\s+(?:entered|left)\b/i.test(l.text)&&l.x>close.x+close.w&&l.x<shop.x&&l.y>close.y+close.h);
-  if(messages.length>=3){const b=union(messages);result.chat=rect({x:b.x-4*scale,y:b.y-4*scale,w:Math.min(shop.x-b.x-8*scale,b.w+40*scale),h:b.h+8*scale});}
+ // The balance field and the shop chat sit at fixed offsets from the Close Store button in the same window.
+ const field=controls&&box(close,BALANCE_FIELD);
+ const inField=w=>w.x+w.w/2>=field.x&&w.y+w.h/2>=field.y&&w.x+w.w/2<=field.x+field.w&&w.y+w.h/2<=field.y+field.h;
+ if(controls&&controlMoney.length===0){result.balance=rect(result.mode==='sold-items'?field:{x:close.x-25*scale,y:close.y+close.h+8*scale,w:close.w+35*scale,h:Math.max(close.h*3,22*scale)});result.balanceEstimated=true;}
+ // Padding to the user's placements: the chat box starts at its window frame, the mesos box covers the field's frame.
+ const pad=(r,p,top=p,bottom=p)=>({x:r.x-p,y:r.y-top,w:r.w+2*p,h:r.h+top+bottom});
+ // From the frame's pixels when available: the chat's white message area and input line, then the mesos field beside it.
+ const area=pixels&&result.mode==='sold-items'?findChat(pixels,lines,scale,ui,shop.x):null;
+ if(area){result.chat={...rect(pad({...area,h:area.bottom-area.y+1},2*ui,6*ui)),text:rect(area)};
+  const f=findField(pixels,area,ui);if(f){result.balance=rect(pad(f,3*ui,5*ui,6*ui));delete result.balanceEstimated;}}
+ else if(controls&&result.mode==='sold-items'){
+  const messages=lines.filter(l=>CHAT_MESSAGE(l)&&l.x>close.x+close.w&&l.x<shop.x&&l.y>close.y+close.h);
+  const chat=box(close,CHAT_WINDOW);chat.w=Math.min(chat.w,shop.x-chat.x);
+  if(messages.length>=3&&messages.every(l=>l.x>=chat.x&&l.x+l.w<=chat.x+chat.w&&l.y>=chat.y&&l.y+l.h<=chat.y+chat.h))result.chat={...rect(chat),text:rect(inset(chat,CHAT_WINDOW.text))};
  }
- if(controlMoney.length===1){const w=controlMoney[0];result.balance=rect({x:w.x-2*scale,y:w.y-2*scale,w:w.w+4*scale,h:w.h+4*scale});}
+ // The field geometry is measured only for the Sold Items layout; other layouts keep the box around the digits.
+ if(controlMoney.length===1&&!(area&&result.balance&&!result.balanceEstimated)){const w=controlMoney[0];result.balance=rect(result.mode==='sold-items'&&inField(w)?field:{x:w.x-2*scale,y:w.y-2*scale,w:w.w+4*scale,h:w.h+4*scale});}
  return result;
 }
 

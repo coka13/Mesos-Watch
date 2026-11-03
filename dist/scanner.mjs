@@ -1,7 +1,7 @@
 import {iconEl,mesoAmt} from './checker.mjs?v=ms-2';
 // Live FM Scanner: reads any shop window in the shared game window and contributes its listings to the price database.
 // Screen reading only: no clicks, no keyboard input, no game memory. Players roam the FM however they like.
-import {tsvWords,frameScale} from './locate.mjs?v=autoselect-4';
+import {tsvWords,frameScale} from './locate.mjs?v=autoselect-7';
 import {readShop,confirmed,listingKey,averageHash,shopKeyOf,parsePriceLine,cleanName} from './shop.mjs?v=pc-1';
 import {configured,reportObservations,shareIcon} from './api.mjs?v=ms-2';
 const $=id=>document.getElementById(id);

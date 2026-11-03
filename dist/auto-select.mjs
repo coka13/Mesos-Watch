@@ -1,18 +1,18 @@
-import {locateRegions,tsvWords} from './locate.mjs?v=autoselect-4';
+import {locateRegions,tsvWords} from './locate.mjs?v=autoselect-7';
 import {validRegion} from './capture-geometry.mjs';
 export const ESSENTIAL_REGIONS=['total','items','balance'];
 export const requiredStoreRegions=regions=>regions.mode==='sold-items'?['items','balance']:ESSENTIAL_REGIONS;
 export const storeRegionsReady=regions=>requiredStoreRegions(regions).every(key=>!!regions[key]);
 // All passes inspect one immutable frame. Never merge boxes from different frames or OCR interpretations.
-export async function detectStoreRegions({recognize,width,height,scale,sourceWidth,sourceHeight,coinScore,onProgress=()=>{},isCurrent=()=>true}){
+export async function detectStoreRegions({recognize,width,height,scale,sourceWidth,sourceHeight,coinScore,pixels=null,onProgress=()=>{},isCurrent=()=>true}){
  let best={regions:{},confidence:null,attempts:[],missing:[...ESSENTIAL_REGIONS]},bestScore=-1;
  for(const [index,pass]of [{name:'original',mode:'11'},{name:'contrast',mode:'11'},{name:'threshold',mode:'3'}].entries()){
   if(!isCurrent())return{...best,cancelled:true};
   onProgress({attempt:index+1,pass:pass.name});
   const {data}=await recognize(pass);
   if(!isCurrent())return{...best,cancelled:true};
-  const words=tsvWords(data.tsv),regions=locateRegions(words,width,height,scale,coinScore);
-  for(const key of ['total','items','balance','sale','chat'])if(regions[key]&&!validRegion(regions[key],sourceWidth,sourceHeight))delete regions[key];
+  const words=tsvWords(data.tsv),regions=locateRegions(words,width,height,scale,coinScore,pixels);
+  for(const key of ['total','items','balance','sale','chat'])if(regions[key]&&(!validRegion(regions[key],sourceWidth,sourceHeight)||regions[key].text&&!validRegion(regions[key].text,sourceWidth,sourceHeight)))delete regions[key];
   const missing=requiredStoreRegions(regions).filter(key=>!regions[key]);
   const attempt={pass:pass.name,words:words.length,confidence:data.confidence??null,missing};
   best.attempts.push(attempt);

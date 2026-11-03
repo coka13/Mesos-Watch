@@ -1,11 +1,11 @@
-// Navigation, world picker, FM Megaphones and Settings (including admin moderation).
-import {searchItems,NOT_SET_UP,configured,worlds,megaphonePlans,liveMegaphones,myMegaphones,startCheckout,moderateMegaphone,adminSignIn,adminState,signOut,moderationQueue,unverifiedItems,updateItem,catalogSyncLog,catalogSyncNow} from './api.mjs?v=ms-2';
+// Public navigation, world picker, FM Megaphones and browser-data controls.
+import {searchItems,NOT_SET_UP,configured,worlds,megaphonePlans,liveMegaphones,myMegaphones} from './api.mjs?v=ms-2';
 import {checkMegaphone,MAX_MESSAGE} from './megaphone-rules.mjs?v=pc-1';
-import {show,worldChanged,ago,iconEl} from './checker.mjs?v=ms-2';
+import {show,worldChanged,iconEl} from './checker.mjs?v=ms-3';
 const $=id=>document.getElementById(id);
 const el=(tag,props={},...kids)=>{const e=Object.assign(document.createElement(tag),props);e.append(...kids.filter(k=>k!=null&&k!==false));return e;};
 const money=c=>'$'+(c/100).toFixed(2);
-const VIEWS=['checker','trends','scanner','history','megaphones','store','settings','stores','opportunities','watchlist','alerts','reports'];
+const VIEWS=['checker','trends','scanner','history','megaphones','store','settings','stores','opportunities'];
 const LEGACY={watcher:'store','sale-activity':'store',support:'store',discord:'store',guide:'settings',prices:'checker',item:'checker'};
 
 // ---- Router ----
@@ -17,11 +17,11 @@ function route(){
  const links=[...document.querySelectorAll('#nav a')],subMatch=links.some(a=>a.dataset.view===view&&a.dataset.sub&&a.dataset.sub===arg);
  for(const a of links)a.toggleAttribute('aria-current',a.dataset.view===view&&(subMatch?a.dataset.sub===arg:!a.dataset.sub));
  document.body.dataset.view=view;$('community-status').textContent='';window.dispatchEvent(new CustomEvent('mesoswatch:view',{detail:{view,param:arg}}));
- if(view!=='checker')document.title=document.querySelector(`#nav a[data-view="${view}"]`)?.textContent.trim()+' · Mesos-Watch';
+ if(view!=='checker')document.title=({history:'Price History',settings:'Privacy & browser data'}[view]||document.querySelector(`#nav a[data-view="${view}"]`)?.textContent.trim()||'Mesos-Watch')+' · Mesos-Watch';
  const anchor=arg&&!param&&document.getElementById(arg);
  show(view,param).catch(()=>{});
  if(view==='megaphones')loadMegaphoneView(new URLSearchParams(query));
- if(view==='settings')loadSettings();
+
  if(anchor){anchor.closest('details')?.setAttribute('open','');if(anchor.tagName==='DETAILS')anchor.open=true;setTimeout(()=>anchor.scrollIntoView({block:'start',behavior:'smooth'}),view==='settings'?400:0);}
  else if(!param)window.scrollTo({top:0});
 }
@@ -96,47 +96,10 @@ async function refreshMine(){
 $('mg-message').oninput=preview;$('mg-sender').oninput=preview;
 $('mg-form').onsubmit=async e=>{e.preventDefault();const r=checkMegaphone({message:$('mg-message').value,sender:$('mg-sender').value});if(r.errors.length)return preview();
  $('mg-buy').disabled=true;note('Opening secure checkout…','');
- try{const out=await startCheckout({message:r.message,sender:r.sender,world:sel.value,plan_id:chosen,...(mgItem?{item_id:mgItem.id}:{})});location.href=out.url;}
+ const fields={message:r.message,sender:r.sender,world:sel.value,plan_id:chosen,...(mgItem?{item_id:mgItem.id}:{})},provider=e.submitter?.dataset.provider;
+ try{if(provider){await (await import('./pay.mjs?v=pay-2')).startPayment('megaphone',provider,fields);return;}throw Error('Choose PayPal or crypto to continue.');}
  catch(e){note(e.message,'error');preview();}};
 
-// Admin links appear only for a signed-in admin. The server enforces every admin action regardless.
-function showAdminNav(on){for(const g of document.querySelectorAll('#nav .admin-only'))g.hidden=!on;}
-adminState().then(s=>showAdminNav(!!s?.admin)).catch(()=>{});
-
-// ---- Settings ----
-async function loadSettings(){
- const s=await adminState().catch(()=>({email:null,admin:false}));
- $('adm-state').textContent=s.email?(s.admin?`Signed in as ${s.email} (admin).`:`Signed in as ${s.email}, which is not an admin account.`):'Not signed in. Only site admins need this.';
- showAdminNav(s.admin);$('adm-out').hidden=!s.email;$('adm-login').hidden=!!s.email;$('adm-panel').hidden=!s.admin;
- if(s.admin){loadQueue();loadItems();loadSync();}
-}
-const SYNC_LABEL={requested:'Downloading…',applied:'Updated',unchanged:'No changes',failed:'Failed'};
-async function loadSync(){
- try{const log=await catalogSyncLog();
-  $('adm-sync-log').replaceChildren(...(log.length?log.map(r=>el('li',{},el('span',{className:'msg',textContent:`${SYNC_LABEL[r.status]||r.status}${r.items!=null?` · ${r.items} items`:''}`}),el('small',{textContent:`${new Date(r.requested_at).toLocaleString()}${r.message?' · '+r.message:''}`}))):[el('li',{className:'empty',textContent:'No catalog update recorded. Source permission and operator configuration are required before synchronization.'})]));
- }catch(e){$('adm-sync-log').replaceChildren(el('li',{className:'empty error',textContent:e.message}));}
-}
-$('adm-sync').onclick=async()=>{const b=$('adm-sync');b.disabled=true;try{const id=await catalogSyncNow();b.textContent=id?'Downloading… applied within 5 minutes':'A download is already running';}catch(e){b.textContent=e.message;}loadSync();setTimeout(()=>{b.disabled=false;b.textContent='Update now';loadSync();},60000);};
-$('adm-login').onsubmit=async e=>{e.preventDefault();try{await adminSignIn($('adm-email').value.trim());$('adm-state').textContent='Check your inbox for the sign-in link.';}catch(err){$('adm-state').textContent=err.message;}};
-$('adm-out').onclick=async()=>{await signOut();loadSettings();};
-async function loadQueue(){
- try{const q=await moderationQueue();
-  $('adm-queue').replaceChildren(...(q.length?q.map(m=>{const reason=el('input',{placeholder:'Reason (shown to buyer)',maxLength:200});
-   const act=(a,extra)=>async()=>{try{await moderateMegaphone(a,m.id,{reason:reason.value,...extra});loadQueue();loadStrip();}catch(e){alertRow.textContent=e.message;}};
-   const alertRow=el('small',{className:'err'});
-   return el('li',{},el('span',{className:'msg',textContent:(m.sender?m.sender+' : ':'')+m.message}),el('small',{textContent:`${m.display_status} · ${m.minutes} min · ${money(m.price_cents)}${m.livemode?'':' (test)'} · ${ago(m.created_at)}${m.starts_at?' · '+new Date(m.starts_at).toLocaleString()+' → '+new Date(m.ends_at).toLocaleTimeString():''}`}),
-    el('div',{className:'row'},reason,m.display_status==='paid_pending_review'&&el('button',{textContent:'Approve',className:'primary',onclick:act('approve')}),['paid_pending_review','awaiting_payment'].includes(m.display_status)&&el('button',{textContent:m.payment_intent?'Reject & refund':'Reject',onclick:act('reject')}),['queued','live'].includes(m.display_status)&&el('button',{textContent:'Remove & refund',onclick:act('remove',{refund:true})}),['queued','live'].includes(m.display_status)&&el('button',{textContent:'Remove, no refund',onclick:act('remove',{refund:false})})),alertRow);}):[el('li',{className:'empty',textContent:'Nothing waiting.'})]));
- }catch(e){$('adm-queue').replaceChildren(el('li',{className:'empty error',textContent:e.message}));}
-}
-async function loadItems(){
- try{const items=await unverifiedItems();
-  $('adm-items').replaceChildren(...(items.length?items.map(it=>{const gid=el('input',{type:'number',placeholder:'Game item ID',min:1000000,max:9999999,value:it.game_id||''}),name=el('input',{value:it.name,maxLength:60}),msg=el('small');
-   // Names outside the Classic catalog are nearly always NX items, so NX is the default type.
-   const source=el('input',{placeholder:'Classic release verification URL (https://…)',type:'url',required:true});
-   const cat=el('select',{ariaLabel:'Item type'},...[['cash','NX'],['equip','Equipment'],['use','Use'],['setup','Setup'],['etc','Etc']].map(([v,t])=>new Option(t,v,false,v===(it.category!=='unknown'?it.category:'equip'))));
-   return el('li',{},iconEl(it,28),name,cat,gid,source,el('button',{textContent:'Verify',onclick:async()=>{try{if(!/^https:\/\//.test(source.value.trim()))throw Error('Provide a release verification source URL.');await updateItem(it.id,{name:name.value.trim(),category:cat.value,game_id:gid.value?+gid.value:null,verified:true,release_status:'released',last_verified_at:new Date().toISOString(),verification_source:source.value.trim()});loadItems();}catch(e){msg.textContent=e.message;}}}),el('small',{textContent:'first seen '+ago(it.first_seen)}),msg);}):[el('li',{className:'empty',textContent:'No community items waiting for review.'})]));
- }catch(e){$('adm-items').replaceChildren(el('li',{className:'empty error',textContent:e.message}));}
-}
 // Two-step confirm built into the page (no browser dialogs).
 $('set-clear-sales').onclick=()=>{const b=$('set-clear-sales');if(b.dataset.armed){window.dispatchEvent(new Event('mesoswatch:clear-sales'));b.textContent='Sales history cleared';delete b.dataset.armed;setTimeout(()=>b.textContent='Clear my sales history',2500);}else{b.dataset.armed='1';b.textContent='Click again to clear';setTimeout(()=>{delete b.dataset.armed;b.textContent='Clear my sales history';},4000);}};
 $('set-reset-consent').onclick=()=>{try{localStorage.removeItem('mw-scan-consent');}catch{}const c=$('scan-consent');if(c.checked){c.checked=false;c.dispatchEvent(new Event('change'));}$('set-reset-consent').textContent='Scanner agreement reset';};

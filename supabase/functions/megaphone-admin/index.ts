@@ -25,7 +25,8 @@ Deno.serve(async (req) => {
       if (action === 'reject' && mega.status !== 'paid_pending_review' && mega.status !== 'awaiting_payment') return json({ error: `Cannot reject a ${mega.status} megaphone.` }, 400, headers);
       if (action === 'remove' && mega.status !== 'scheduled') return json({ error: 'Only scheduled megaphones can be removed.' }, 400, headers);
       let status = action === 'reject' ? 'rejected' : 'removed';
-      if (mega.payment_intent && (action === 'reject' || refund)) {
+      // Stripe refunds are automatic; PayPal and crypto refunds are made in their dashboards (the row stays rejected/removed).
+      if (mega.payment_intent && (mega.provider ?? 'stripe') === 'stripe' && (action === 'reject' || refund)) {
         await stripe().refunds.create({ payment_intent: mega.payment_intent, metadata: { megaphone_id: id, reason: note } }, { idempotencyKey: `megaphone-refund-${id}` });
         status = 'refunded';
       }

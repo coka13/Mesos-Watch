@@ -2,13 +2,15 @@
 
 Status: source changes are local only. Do not treat historical checkmarks or catalog SQL seed files as proof of production setup. There are sixteen numbered migrations (00000–01500); the original eight are preserved unchanged.
 
-## Production state (read-only audit, 2026-11-02)
+## Production state (applied 2026-11-03)
 
-Checked through the public API with the anon key (no private access was available: `SUPABASE_DB_URL` in `.env.local` is empty).
+The 2026-11-02 audit (anon key only) was wrong: production actually had only 00000 and 00100. On 2026-11-03, with `SUPABASE_DB_URL` set:
 
-- Applied: migrations 00000–00700. Not applied: 00800–01500 and 20261102000100 (`player_stores`, `watchlist`, `market_observations` and the other new tables do not exist yet). `megaphone_plans` already holds the three packages ($1.99/30 min, $3.99/2 h, $5.99/6 h).
-- `items`: 3,444 rows (equip 1,192 · use 345 · setup 231 · etc 253 · NX 1,423), all kept.
-- `observations`: 5 rows, all incorrect (see Cleanup). `megaphones`: 0 rows.
+- Backup snapshot written to `../phase1-private-backup` first; the cleanup removed the 5 incorrect observations (archived in `cleanup_archive`).
+- Every migration through 20261102090000 is now applied. 00200–00800, 01200, 01300 and 20261102000100 were applied in one transaction. **00300's pg_cron/pg_net scheduling block was left out on purpose**, so no unattended OSMS download is scheduled (and pg_cron/pg_net stay disabled). The catalog functions exist but stay gated behind `catalog_source_approved`.
+- The 3,444 items that were already `verified` were set to `release_status='available'` (`verification_source` notes this) so search looks the same as before 00800. New imports still need review.
+- Active megaphone plans are now basic30/premium120/featured360 ($1.99/$3.99/$5.99). Sponsor plans are s7 ($15) and s30 ($45).
+- Still to do: deploy the edge functions (step 4 and Payments below) and publish `dist/`.
 
 ## Deployment order
 
@@ -36,7 +38,7 @@ Checked through the public API with the anon key (no private access was availabl
 - 013: rejected observations withheld from market aggregates/listings without deletion.
 - 014–015: structured Cash Shop candidates and admin acceptance with ID/source checks; NX currency remains separate.
 
-No migration deletes the catalog, users, legitimate sales, payments or existing reports. Review newly added restrictive foreign keys before any future account deletion. All migrations here remain unapplied externally.
+No migration deletes the catalog, users, legitimate sales, payments or existing reports. Review newly added restrictive foreign keys before any future account deletion.
 
 ## Private configuration
 
@@ -69,3 +71,31 @@ To stop the same mistake recurring, the scanner no longer submits a shop window 
 For local recovery use the checkpoint branches and Git bundle in the delivery report, in a new directory. Restore source privately; avoid reset --hard on any active checkout. No external rollback is needed for this run.
 
 For a later database rollout, take provider snapshots and schema-only exports of replaced functions/views before applying migrations; validate the reverse definitions against the staging restore. New tables/columns should be retained during an application rollback to preserve newly collected data. Disable writers/cron first and prefer a forward compatibility fix. A schema rollback that drops new data is not supplied or authorized. No production restore or database down-migration has been tested; do not claim the new schema is restore-verified.
+
+## PayPal and crypto payments (megaphones, sponsor slots, donations)
+
+Stripe doesn't accept Israeli accounts, so the site takes payments through **PayPal** and **crypto via NOWPayments**. The browser only starts a payment. Prices come from the database, and a payment counts only after the server confirms it with the provider: `paypal-capture` captures the order itself, and `nowpayments-ipn` checks the signature, invoice and amount. Megaphones and sponsor banners still need an admin's approval before they go live. Both providers start in **sandbox (test) mode**, so no real money moves until you switch them to live.
+
+1. **Database:** run `supabase/migrations/20261102090000_paypal_crypto_payments.sql`. It adds sponsor slots ($15 for 7 days, $45 for 30 days; change them in `sponsor_plans`) and donations.
+2. **PayPal:** at developer.paypal.com, open Apps & Credentials, stay on the Sandbox tab and create an app. Copy its Client ID and Secret.
+3. **NOWPayments:** create an account at nowpayments.io (account.sandbox.nowpayments.io for testing). Add a payout wallet, then create an API key and an IPN secret key under Settings → Payments.
+4. Set the secrets and deploy the functions:
+
+```powershell
+supabase secrets set PAYPAL_CLIENT_ID=... PAYPAL_CLIENT_SECRET=... PAYPAL_ENV=sandbox
+supabase secrets set NOWPAYMENTS_API_KEY=... NOWPAYMENTS_IPN_SECRET=... NOWPAYMENTS_ENV=sandbox
+supabase functions deploy pay-create
+supabase functions deploy paypal-capture
+supabase functions deploy nowpayments-ipn --no-verify-jwt
+supabase functions deploy megaphone-admin
+```
+
+`SITE_ORIGINS` (from the Stripe step) must list your site's address. That's where buyers return to after paying.
+
+**Testing:** PayPal sandbox gives you a test buyer account (Sandbox → Accounts), so you can pay with fake money. NOWPayments sandbox invoices can be marked as paid from its dashboard. Test donations never appear on the public thank-you list.
+
+**Going live:** create a Live app in PayPal and a live NOWPayments key, set them as secrets with `PAYPAL_ENV=live` and `NOWPAYMENTS_ENV=live`, and redeploy.
+
+**Approving and refunding:** sponsor slots and donations appear in Settings → Admin under "Sponsors and donations". PayPal and crypto refunds are made in the PayPal or NOWPayments dashboard. Afterwards, mark the slot refunded on the site. Set `MEGAPHONE_AUTO_APPROVE=true` or `SPONSOR_AUTO_APPROVE=true` to skip the review step.
+
+In `dist/config.js`, `payments.providers` controls which buttons appear, and `stripe: true` shows the Stripe button again.

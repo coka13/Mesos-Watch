@@ -1,6 +1,6 @@
 // My Store evidence for the Sold Items layout (no cumulative Sales total).
 // A sale is verified only when independent evidence agrees: a new Sold Items record (name, buyer, quantity) read the same
-// way by two OCR passes, a personal-balance increase that equals a sale after the store fee, and either the listed price
+// way by at least two OCR readings, a personal-balance increase that equals a sale after the store fee, and either the listed price
 // the player entered or the buyer being seen in the shop chat. Anything else is kept as an uncertain event.
 
 // The in-game store notice: "Please be aware that a 3% fee will be deducted from sales."
@@ -26,14 +26,28 @@ export function parseSoldRecords(text){
  return records.map(r=>({...r,key:nameKey(r.name)+'|'+fold(r.buyer)+'|'+r.qty}));
 }
 
-// Two preprocessings of the same crop. A record is trusted only when both passes produced it; the rest stay visible but
-// cannot verify a sale. Records are compared as multisets so one misread line cannot shift every later record.
-export function chooseSoldReading(first,second){
- const a=parseSoldRecords(first.text),b=parseSoldRecords(second.text);
- const left=new Map();for(const r of b)left.set(r.key,(left.get(r.key)||0)+1);
- const records=a.map(r=>{const n=left.get(r.key)||0;if(n)left.set(r.key,n-1);return{...r,agreed:n>0};});
- const confidence=Math.min(first.confidence??0,second.confidence??0);
- return{records,confidence,complete:a.length===b.length&&records.every(r=>r.agreed),display:records.map(r=>`${r.name} ×${r.qty} → ${r.buyer}`).join('\n')};
+// Same record despite single-character OCR slips: equal quantity, item names within one error per six characters, buyers
+// within sameName's tolerance. Works on records and on their keys ("name|buyer|qty").
+const close=(a,b,per)=>{a=a.replace(/[^a-z0-9]/g,'');b=b.replace(/[^a-z0-9]/g,'');return a.length>=2&&b.length>=2&&distance(a,b)<=Math.max(1,Math.floor(Math.min(a.length,b.length)/per));};
+export function sameKey(a,b){if(a===b)return true;const [an,ab,aq]=a.split('|'),[bn,bb,bq]=b.split('|');return aq===bq&&close(an,bn,6)&&close(ab,bb,4);}
+// The spelling closest to all readings of one record. Ties go to the longer one (small blurred text loses letters more often
+// than it gains them), then to the earlier reading.
+const medoid=values=>values.map(v=>[v,values.reduce((s,w)=>s+distance(fold(v),fold(w)),0)]).sort((a,b)=>a[1]-b[1]||b[0].length-a[0].length)[0][0];
+
+// Several preprocessings of the same crop. A record is trusted only when at least two readings produced it; the rest stay
+// visible but cannot verify a sale. Records are matched one-to-one so one misread line cannot shift every later record.
+export function chooseSoldReading(...readings){
+ const parsed=readings.map(r=>parseSoldRecords(r.text).map(rec=>({...rec,used:false})));
+ const groups=[];
+ for(const [i,list] of parsed.entries())for(const r of list){if(r.used)continue;r.used=true;const group=[r];
+  for(const other of parsed.slice(i+1)){const m=other.find(o=>!o.used&&sameKey(o.key,r.key));if(m){m.used=true;group.push(m);}}
+  // Records only a later reading found are kept only when two readings agree; the first reading's appear either way.
+  if(i===0||group.length>1)groups.push(group);}
+ const records=groups.map(g=>{const name=medoid(g.map(r=>r.name)),buyer=medoid(g.map(r=>r.buyer)),{qty,truncated}=g[0];
+  return{name,buyer,qty,truncated,key:nameKey(name)+'|'+fold(buyer)+'|'+qty,agreed:g.length>1};});
+ // With three readings one may be poor; the middle confidence describes the agreeing pair.
+ const confidence=readings.map(r=>r.confidence??0).sort((a,b)=>b-a)[Math.min(1,readings.length-1)];
+ return{records,confidence,complete:records.every(r=>r.agreed),display:records.map(r=>`${r.name} ×${r.qty} → ${r.buyer}`).join('\n')};
 }
 
 // Buyers seen entering the shop, from shop-chat text ("Ssr1 has entered.").
@@ -51,10 +65,11 @@ export function parsePriceList(text){
  for(const line of String(text||'').split('\n')){const m=line.trim().match(/^(.+?)\s*[=:,\t]?\s*(\d{1,3}(?:[,.\s]\d{3})+|\d{1,12})\s*(?:mesos?)?$/i);if(!m)continue;const price=Number(m[2].replace(/[,.\s]/g,''));if(Number.isSafeInteger(price)&&price>0&&nameKey(m[1]))prices.set(nameKey(m[1]),price);}
  return prices;
 }
-// Exact name, or a unique prefix when the Sold Items list cut the name off with "...".
+// Exact name, the only listed name within OCR tolerance, or a unique prefix when the Sold Items list cut the name off with "...".
 export function listedPrice(prices,record){
  const key=nameKey(record.name);if(prices.has(key))return prices.get(key);
- if(!record.truncated||key.length<4)return null;
+ if(!record.truncated){const near=[...prices.entries()].filter(([name])=>close(name,key,6));return near.length===1?near[0][1]:null;}
+ if(key.length<4)return null;
  const hits=[...prices.entries()].filter(([name])=>name.startsWith(key));
  return hits.length===1?hits[0][1]:null;
 }
@@ -74,7 +89,7 @@ export function unitPricesFor(net,qty,rate=STORE_FEE_RATE){
 export function verifySales(records,balanceIncrease,{prices=new Map(),visitors=[],feeRate=STORE_FEE_RATE}={}){
  const uncertain=reason=>({verified:false,reason,records,balanceIncrease});
  if(!records.length)return uncertain('No new Sold Items record.');
- if(records.some(r=>!r.agreed))return uncertain('A new Sold Items record was read differently by the two OCR passes.');
+ if(records.some(r=>!r.agreed))return uncertain('A new Sold Items record was not read the same way by two OCR readings.');
  if(!(balanceIncrease>0))return uncertain(balanceIncrease<0?'Your mesos went down while an item sold (another transaction happened at the same time).':'An item appeared in Sold Items but your mesos did not increase. It may have scrolled into view.');
  const known=records.map(r=>listedPrice(prices,r));
  if(known.every(p=>p!==null)){
@@ -106,13 +121,16 @@ export function observeSoldItems(state,reading){
  const keep=(kind,extra={})=>({kind,...extra,state:Object.freeze({...state,...(extra.patch||{})})});
  if(!valid(reading.balance))return keep('unreadable',{reason:'Personal mesos unreadable.'});
  if(!Array.isArray(reading.records)||(reading.confidence??0)<50)return keep('unreadable',{reason:'Sold Items unreadable.'});
+ // A record already seen keeps its key when a later reading spells it one character differently.
+ if(state.seen){const known=[...Object.keys(state.seen),...(state.glimpsed||[])];
+  reading={...reading,records:reading.records.map(r=>{if(r.key in state.seen)return r;const k=known.find(k=>sameKey(k,r.key));return k?{...r,key:k}:r;})};}
  const now=counts(reading.records.filter(r=>r.agreed));
  const visitors=[...new Set([...(state.visitors||[]),...(reading.visitors||[])])].slice(-200);
  if(state.mode!=='sold-items'||!state.seen){
   return{kind:'baseline',state:Object.freeze({...state,mode:'sold-items',initialBalance:state.initialBalance??reading.balance,balanceRef:reading.balance,seen:Object.freeze(now),glimpsed:Object.freeze(reading.records.filter(r=>!r.agreed).map(r=>r.key)),visitors,candidate:null,waits:0})};
  }
  const fresh=[];for(const r of reading.records.filter(r=>r.agreed)){const before=state.seen[r.key]||0,taken=fresh.filter(f=>f.key===r.key).length;if((now[r.key]||0)-before>taken)fresh.push(r);}
- // Records only one pass produced: never a sale on their own, but they block a verification that might be missing them.
+ // Records only one reading produced: never a sale on their own, but they block a verification that might be missing them.
  const unsure=reading.records.filter(r=>!r.agreed&&!(r.key in state.seen)&&!(state.glimpsed||[]).includes(r.key));
  const glimpsed=Object.freeze([...new Set([...(state.glimpsed||[]),...reading.records.filter(r=>!r.agreed).map(r=>r.key)])].slice(-200));
  const delta=reading.balance-state.balanceRef;
@@ -138,4 +156,9 @@ export function agreedNumber(a,b,parse){
  const confidence=Math.min(a.confidence??0,b.confidence??0);
  const grouped=/^\d{1,3}(?:[,.]\d{3})+$/.test(String(a.text).trim())&&/^\d{1,3}(?:[,.]\d{3})+$/.test(String(b.text).trim());
  return confidence>=65||(grouped&&confidence>=50)?first:null;
+}
+// Several passes: the number any two of them agree on (as above), else null.
+export function majorityNumber(reads,parse){
+ for(let i=0;i<reads.length;i++)for(let j=i+1;j<reads.length;j++){const n=agreedNumber(reads[i],reads[j],parse);if(n!==null)return n;}
+ return null;
 }

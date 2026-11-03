@@ -6,6 +6,7 @@ import {Jimp} from 'jimp';
 import {createWorker} from 'tesseract.js';
 import {frameScale,tsvWords,locateRegions,coinScorer} from '../dist/locate.mjs';
 import {numericInkBounds} from '../dist/numeric-region.mjs';
+import {ocrImage,TEXT_PASSES,NUMBER_PASSES} from '../dist/ocr-prep.mjs';
 import {enhanceFramePixels} from '../dist/auto-select.mjs';
 
 const [input,output]=process.argv.slice(2);
@@ -23,20 +24,22 @@ for(const pass of [{name:'original',mode:'11'},{name:'contrast',mode:'11'},{name
  passes[pass.name]={tsv:data.tsv,confidence:data.confidence};
  console.log(pass.name,data.confidence);
 }
-// Region crops, read the way app.js reads them: 4x nearest-neighbour, 20px white margin, contrast then threshold.
+// Region crops, read the way app.js reads them.
 const coin=coinScorer({data:scaled.bitmap.data,width:scaled.bitmap.width,height:scaled.bitmap.height},scale);
-const regions=locateRegions(tsvWords(passes.original.tsv),scaled.bitmap.width,scaled.bitmap.height,scale,coin);
-const prepare=(image,threshold)=>{const out=new Jimp({width:image.bitmap.width+40,height:image.bitmap.height+40,color:0xffffffff});const d=image.bitmap.data;
- for(let p=0;p<d.length;p+=4){let v=.299*d[p]+.587*d[p+1]+.114*d[p+2];v=threshold?(v<165?0:255):Math.max(0,Math.min(255,(v-128)*1.4+128));d[p]=d[p+1]=d[p+2]=v;}
- out.composite(image,20,20);return out.getBuffer('image/png');};
-const cropOf=(r,s=4)=>source.clone().crop({x:r.x,y:r.y,w:r.w,h:r.h}).resize({w:r.w*s,h:r.h*s,mode:'nearestNeighbor'});
+// Regions from the pass Auto Select would keep: the first with Sold Items and mesos, else the one finding most.
+const pixels={data:scaled.bitmap.data,width:scaled.bitmap.width,height:scaled.bitmap.height};
+const found=Object.values(passes).map(p=>locateRegions(tsvWords(p.tsv),scaled.bitmap.width,scaled.bitmap.height,scale,coin,pixels));
+const regions=found.find(r=>r.items&&r.balance)||found.sort((a,b)=>Object.keys(b).length-Object.keys(a).length)[0];
+// Same preprocessing as app.js (ocr-prep.mjs) on a 1:1 crop; the passes each region gets there.
+const prepare=options=>{const i=ocrImage(cropped,options),out=new Jimp({width:i.width,height:i.height});out.bitmap.data=Buffer.from(i.data);return out.getBuffer('image/png');};
+let cropped;
 const crops={};
-for(const [key,mode,whitelist] of [['balance','7','0123456789, .'],['items','6',''],['chat','6','']]){
+for(const [key,mode,whitelist,ocrPasses] of [['balance','7','0123456789, .',NUMBER_PASSES],['items','6','',TEXT_PASSES],['chat','6','',TEXT_PASSES.slice(0,1)]]){
  if(!regions[key])continue;
- let image=cropOf(regions[key]);
- if(key==='balance'){const ink=numericInkBounds({data:image.bitmap.data,width:image.bitmap.width,height:image.bitmap.height},4);if(ink)image=image.crop({x:ink.x,y:ink.y,w:ink.w,h:ink.h});}
+ const r=regions[key].text||regions[key],b=source.clone().crop({x:r.x,y:r.y,w:r.w,h:r.h}).bitmap;cropped={data:b.data,width:b.width,height:b.height};
+ if(key==='balance'){const ink=numericInkBounds(cropped,1);if(ink){const t=source.clone().crop({x:r.x+ink.x,y:r.y+ink.y,w:ink.w,h:ink.h}).bitmap;cropped={data:t.data,width:t.width,height:t.height};}}
  await worker.setParameters({tessedit_pageseg_mode:mode,tessedit_char_whitelist:whitelist});
- const reads=[];for(const threshold of [false,true]){const {data}=await worker.recognize(await prepare(image.clone(),threshold));reads.push({text:data.text,confidence:data.confidence});}
+ const reads=[];for(const options of ocrPasses){const {data}=await worker.recognize(await prepare(options));reads.push({text:data.text,confidence:data.confidence});}
  crops[key]={region:regions[key],reads};console.log(key,JSON.stringify(reads.map(r=>[r.text.trim().slice(0,80),Math.round(r.confidence)])));
 }
 await worker.terminate();

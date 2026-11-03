@@ -18,7 +18,7 @@ if(mega)new MutationObserver(()=>replay(mega,'enter')).observe(mega,{childList:t
 // Watchlist additions: a slime hops up with a star.
 window.addEventListener('mesoswatch:watched',e=>{
  const pop=document.createElement('div');pop.className='watch-pop';pop.setAttribute('role','status');
- const img=Object.assign(document.createElement('img'),{src:'sprites/slime.svg',alt:'',width:40,height:32});
+ const img=Object.assign(document.createElement('img'),{src:'sprites/slime.gif',alt:'',width:36,height:26});
  pop.append(img,document.createTextNode('★ '+String(e.detail?.name||'Item')+' watched'));
  document.body.append(pop);setTimeout(()=>pop.remove(),2600);
 });
