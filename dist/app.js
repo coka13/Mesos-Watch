@@ -41,7 +41,7 @@ async function recordVerified(result,r){
   const saleKey=base+'|'+(sales.filter(e=>e.saleKey?.startsWith(base+'|')).length+n);
   if(notified.has(saleKey))continue;notified.add(saleKey);
   let item=null;try{const [m]=await matchNames([sale.name.replace(/\.{2,}$/,'')]);if(m?.item_id)item={id:m.item_id,game_id:m.game_id,category:m.category,icon_path:m.icon_path,name:m.name};}catch{}
-  const entry={time:new Date().toISOString(),sessionId:state.id,initialBalance:state.initialBalance,kind:'verified',saleKey,names:item?.name||sale.name,qty:sale.qty,buyer:sale.buyer,unitPrice:sale.unitPrice,amount:sale.gross,net:sale.net,fee:sale.fee,method:result.method,icon:item?iconUrl(item):null,corroborated:true,evidence:result.reason,delivery:$('webhook').value.trim()?'Sending':'Recorded (Discord not connected)'};
+  const entry={time:new Date().toISOString(),sessionId:state.id,initialBalance:state.initialBalance,kind:'verified',saleKey,names:item?.name||sale.name,qty:sale.qty,buyer:sale.buyer,unitPrice:sale.unitPrice,amount:sale.gross,net:sale.net,fee:sale.fee,method:result.method,icon:item?iconUrl(item):null,picture:soldPicture(r.picture),corroborated:true,evidence:result.reason,delivery:$('webhook').value.trim()?'Sending':'Recorded (Discord not connected)'};
   sales.unshift(entry);renderSales();
   if($('share-sales')?.checked&&boardConfigured()&&sale.qty>0&&!sale.unitPriceRange)reportObservations([{kind:'sale',item:entry.names,price:sale.unitPrice,qty:sale.qty}],{world:$('world')?.value||''}).then(n=>{if(n?.length){entry.shared='Shared to price board';renderSales();}}).catch(()=>{});
   if($('webhook').value.trim()){
@@ -108,6 +108,24 @@ function prepare(image,options=TEXT_PASSES[0]){const img=ocrImage(image.getConte
 async function readAll(w,image,passes){const reads=[];for(const options of passes)reads.push((await w.recognize(prepare(image,options))).data);return reads;}
 const middle=reads=>reads.map(r=>r.confidence??0).sort((a,b)=>b-a)[Math.min(1,reads.length-1)];
 function showCrop(id,image){const canvas=$(id);canvas.hidden=false;canvas.width=image.width;canvas.height=image.height;canvas.getContext('2d').drawImage(image,0,0);}
+
+const soldIconCache=new Map();
+function soldPicture(picture){return picture?.toDataURL('image/png')||null;}
+function renderSoldItems(records,picture,empty='No sold items found'){
+ const list=$('items-reading');list.replaceChildren();
+ const snapshot=$('sold-items-snapshot');snapshot.hidden=!picture;if(picture)snapshot.src=soldPicture(picture);else snapshot.removeAttribute('src');
+ if(!records.length){list.textContent=empty;return;}
+ for(const record of records){
+  const card=document.createElement('div');card.className='sold-item';
+  const text=document.createElement('div'),name=document.createElement('b'),detail=document.createElement('small');
+  name.textContent=record.name;detail.textContent=[record.qty?'Quantity: '+record.qty:'',record.buyer?'Buyer: '+record.buyer:'',record.agreed===false?'Reading uncertain':''].filter(Boolean).join(' · ');
+  text.append(name,detail);card.append(text);list.append(card);
+  const key=record.name.replace(/\.{2,}$/,'');
+  if(!soldIconCache.has(key)&&boardConfigured())soldIconCache.set(key,matchNames([key]).then(matches=>{const item=matches.find(m=>m.input===key)||matches[0];return item?.item_id?iconUrl(item):null;}).catch(()=>{soldIconCache.delete(key);return null;}));
+  soldIconCache.get(key)?.then(url=>{if(!url||!card.isConnected)return;const img=Object.assign(document.createElement('img'),{src:url,alt:record.name,width:40,height:40,className:'sold-item-icon'});img.onerror=()=>img.remove();card.prepend(img);});
+ }
+}
+
 async function getWorker(){if(worker)return worker;if(!workerPromise){workerPromise=(async()=>{status('Loading the OCR engine for the first reading…');if(!window.Tesseract){await new Promise((resolve,reject)=>{const s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/tesseract.js@6.0.1/dist/tesseract.min.js';s.onload=resolve;s.onerror=()=>{s.remove();reject(Error('Could not load OCR. Check your connection and retry.'));};document.head.append(s);});}worker=await window.Tesseract.createWorker('eng',1,{logger:()=>{}});await worker.setParameters({tessedit_pageseg_mode:'6'});return worker;})();}try{return await workerPromise;}catch(e){workerPromise=null;throw e;}}
 async function reading(){
  const itemsImage=crop('items',1,true),picture=crop('items');
@@ -119,8 +137,8 @@ async function reading(){
  const balance=await readBalance(w),visitors=await readChat(w);
  if(regions.mode==='sold-items'){
   const sold=chooseSoldReading(...itemReads);lastReads.items=sold.records.length+' records · '+Math.round(sold.confidence)+'%';
-  $('total-reading').textContent='Not shown in this layout';
-  $('items-reading').textContent=sold.display||'No Sold Items records found';
+  $('sales-total-card').hidden=true;
+  renderSoldItems(sold.records,picture,'No Sold Items records found');
   $('items-reading').classList.toggle('uncertain',!sold.complete);
   $('item-quality').textContent=sold.complete?'At least two readings agree on every record.':'Records the readings disagree on are shown, but they cannot verify a sale.';
   $('item-quality').classList.toggle('uncertain',!sold.complete);
@@ -130,8 +148,9 @@ async function reading(){
   return{mode:'sold-items',balance,records:sold.records,confidence:sold.confidence,visitors,prices:parsePriceList($('listed-prices').value),feeRate:STORE_FEE_RATE,picture,raw:itemReads.map(r=>r.text).join('\n')};
  }
  const chosen=chooseItemReading(i.data,i2.data);
- $('total-reading').textContent=regions.mode==='sold-items'?'Not shown in this layout':total===null?'Reselect total':fmt(total)+' mesos';
- $('items-reading').textContent=chosen.display||'No item names found — select the names only';
+ $('sales-total-card').hidden=false;
+ $('total-reading').textContent=total===null?'Reselect total':fmt(total)+' mesos';
+ renderSoldItems((chosen.display||'').split('\n').filter(Boolean).map(name=>({name})),picture,'No item names found — select the names only');
  $('items-reading').classList.toggle('uncertain',!chosen.itemReliable);
  $('item-quality').textContent=chosen.itemReliable?'Both readings agree. Compare the spelling with the item crop.':'Uncertain item text — this spelling will not be sent as a sale item. Compare the crop or save it for troubleshooting.';
  $('item-quality').classList.toggle('uncertain',!chosen.itemReliable);
@@ -165,7 +184,7 @@ async function tick(){
    const saleKey=state.id+':'+String(state.total);
    if(notified.has(saleKey)){status('That sale was already recorded. Still watching your store.');return;}
    notified.add(saleKey);
-   const entry={time:new Date().toISOString(),sessionId:state.id,initialBalance:state.initialBalance,names,amount:result.amount,evidence:result.reason,corroborated:result.corroborated,delivery:$('webhook').value.trim()?'Sending':'Recorded (Discord not connected)'};sales.unshift(entry);renderSales();
+   const entry={time:new Date().toISOString(),sessionId:state.id,initialBalance:state.initialBalance,picture:soldPicture(r.picture),names,amount:result.amount,evidence:result.reason,corroborated:result.corroborated,delivery:$('webhook').value.trim()?'Sending':'Recorded (Discord not connected)'};sales.unshift(entry);renderSales();
    if(result.corroborated)shareSale(result,r).then(t=>{if(t){entry.shared=t;renderSales();}});
    if(!result.corroborated){entry.delivery='Unverified · no Discord sale alert or market contribution';status(result.reason,true);renderSales();if(watching&&$('chat-alerts').checked&&$('webhook').value.trim())await checkChat();return;}
    if($('webhook').value.trim())try{
@@ -198,7 +217,7 @@ async function checkChat(){
 
 $('start').onclick=async()=>{try{if($('webhook').value.trim())validWebhook();if(!storeRegionsReady(regions))throw Error('Keep Sold Items and personal mesos visible, then run Auto Select. Select Total Sales too only if this layout shows it.');if($('chat-alerts').checked&&$('webhook').value.trim()&&!regions.chat){selectRegion('chat');throw Error('Select the shop-chat area once before starting message alerts.');}chatState={ready:false,keys:[],candidate:null};$('capture-details').open=false;$('crop-details').open=false;state=createSession(crypto.randomUUID());baselineNote.textContent='Session starting mesos: waiting for a reliable reading';watching=true;mode=null;drag=null;$('badge').classList.add('live');$('badge').replaceChildren(Object.assign(document.createElement('span'),{className:'dot'}),document.createTextNode(' Watching'));controls();await tick();}catch(e){stop(e.message);$('status').classList.add('error');}};
 const isChange=e=>['unverified','uncertain','balance-change'].includes(e.kind);
-function row(entry,example=false){const r=document.createElement('div');r.className='sale-row'+(entry.kind==='verified'?' verified':isChange(entry)?' uncertain':'');const time=document.createElement('time');time.textContent=new Date(entry.time).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});const text=document.createElement('div'),name=document.createElement('strong'),note=document.createElement('small');if(entry.icon){const img=Object.assign(document.createElement('img'),{src:entry.icon,alt:'',width:28,height:28,loading:'lazy',className:'item-icon',onerror(){this.remove();}});name.append(img);}name.append(document.createTextNode(entry.names+(entry.qty>1?' ×'+entry.qty:'')));note.textContent=example?'Example only · no Discord message sent':entry.kind==='verified'?'Verified · '+(entry.buyer?'buyer '+entry.buyer+' · ':'')+(entry.unitPrice?fmt(entry.unitPrice)+' each · ':'')+'received '+fmt(entry.net)+' after fee · '+entry.delivery:entry.delivery+(entry.evidence&&isChange(entry)?' · '+entry.evidence:'')+' · OCR reading';text.append(name,note);const amount=document.createElement('div');amount.className='amount';amount.replaceChildren(mesoAmt(isChange(entry)?(entry.balanceChange>=0?'+':'')+fmt(entry.balanceChange)+' mesos balance change':'+'+fmt(entry.amount)+' mesos',13));r.append(time,text,amount);return r;}
+function row(entry,example=false){const r=document.createElement('div');r.className='sale-row'+(entry.kind==='verified'?' verified':isChange(entry)?' uncertain':'');const time=document.createElement('time');time.textContent=new Date(entry.time).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});const text=document.createElement('div'),name=document.createElement('strong'),note=document.createElement('small');if(entry.icon||entry.picture){const img=Object.assign(document.createElement('img'),{src:entry.icon||entry.picture,alt:entry.icon?'':entry.names+' — store snapshot',width:entry.icon?40:96,height:40,loading:'lazy',className:'item-icon',onerror(){if(entry.picture&&this.src!==entry.picture){this.src=entry.picture;this.width=96;this.alt=entry.names+' — store snapshot';}else this.remove();}});name.append(img);}name.append(document.createTextNode(entry.names+(entry.qty>1?' ×'+entry.qty:'')));note.textContent=example?'Example only · no Discord message sent':entry.kind==='verified'?'Verified · '+(entry.buyer?'buyer '+entry.buyer+' · ':'')+(entry.unitPrice?fmt(entry.unitPrice)+' each · ':'')+'received '+fmt(entry.net)+' after fee · '+entry.delivery:entry.delivery+(entry.evidence&&isChange(entry)?' · '+entry.evidence:'')+' · OCR reading';text.append(name,note);const amount=document.createElement('div');amount.className='amount';amount.replaceChildren(mesoAmt(isChange(entry)?(entry.balanceChange>=0?'+':'')+fmt(entry.balanceChange)+' mesos balance change':'+'+fmt(entry.amount)+' mesos',13));r.append(time,text,amount);return r;}
 function renderSales(){try{localStorage.setItem('mw-sales',JSON.stringify(sales.slice(0,500)));}catch{}$('activity-empty').hidden=sales.length>0;$('sales').replaceChildren(...sales.map(s=>row(s)));$('sale-count').textContent=String(sales.filter(s=>s.corroborated===true).length);$('meso-count').replaceChildren(mesoAmt(fmt(sales.filter(s=>s.corroborated===true).reduce((a,s)=>a+s.amount,0)),13),document.createTextNode(' '),Object.assign(document.createElement('small'),{textContent:'mesos'}));$('export').disabled=!sales.length;}
 $('demo').onclick=()=>{if(sales.length)return;$('sales').replaceChildren(row({time:new Date().toISOString(),names:'Example: Steelies',amount:2500000},true));$('demo').textContent='Example shown below';};
 $('export').onclick=()=>{const safe=s=>{let v=String(s);if(/^[=+@\-\t\r]/.test(v))v="'"+v;return'"'+v.replaceAll('"','""')+'"';};const csv='Time,Items,Total increase (mesos),Delivery\r\n'+sales.map(s=>[s.time,s.names,s.kind==='unverified'?'':s.amount,s.delivery].map(safe).join(',')).join('\r\n');const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download='mesoswatch-sales.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
