@@ -1,0 +1,88 @@
+/* Dark mode: Victoria Island at night. Load after every other stylesheet.
+   theme.mjs sets html[data-theme] from the saved choice or the system preference.
+   The starry sky replaces the day scene; cream insets become navy game windows inside the same wood frames,
+   headings take gold lettering. Wood bars, gold buttons and the megaphone strip are left as they are. */
+html[data-theme="dark"]{
+ color-scheme:dark;
+ /* navy windows */
+ --cream:#1d2539;--cream-2:#242e46;--cream-3:#2c3753;--cream-line:#435173;
+ --panel:#1a2133;--panel-hover:#2a3552;
+ /* ink */
+ --ink:#d8d1c1;--muted:#aea899;--heading:#eec46e;--strip-edge:#33405e;
+ --up:#86d38a;--down:#ff9a80;
+ --bevel:inset 0 0 0 1px rgba(170,190,235,.08);
+ --lift:0 4px 0 rgba(0,0,0,.45),0 10px 22px rgba(0,0,0,.4);
+}
+
+/* Night sky: moon glow, stars, slate clouds, dark hills at the bottom. */
+html[data-theme="dark"] body{background:linear-gradient(180deg,#0a1230 0,#14214a 30%,#1c2b55 55%,#1a3036 80%,#122419 100%) fixed}
+html[data-theme="dark"] .sky:before{background:radial-gradient(circle at 33% 7%,#e9dfc0 0 20px,rgba(233,223,192,.25) 22px,rgba(233,223,192,.06) 64px,transparent 160px),radial-gradient(700px 360px at 33% 0,rgba(140,160,230,.18),transparent 70%)}
+html[data-theme="dark"] .sky:after{content:"";position:absolute;left:0;top:0;width:2px;height:2px;border-radius:50%;animation:twinkle 5s ease-in-out infinite alternate;
+ box-shadow:0.0vw 47.9vh 0 0 rgba(255,248,220,.56),72.9vw 27.7vh 0 0 rgba(255,248,220,.83),75.5vw 28.2vh 0 0 rgba(255,248,220,.77),81.7vw 22.6vh 0 0 rgba(255,248,220,.8),69.8vw 2.8vh 0 0 rgba(255,248,220,.68),92.2vw 42vh 0 1px rgba(255,248,220,.71),92.3vw 35.8vh 0 0 rgba(255,248,220,.74),91.2vw 47.2vh 0 0 rgba(255,248,220,.62),42.8vw 15.3vh 0 0 rgba(255,248,220,.73),72.9vw 45.6vh 0 1px rgba(255,248,220,.59),56.1vw 26.5vh 0 0 rgba(255,248,220,.55),66.4vw 48.1vh 0 0 rgba(255,248,220,.53),40.6vw 24.7vh 0 0 rgba(255,248,220,.66),33.3vw 27.6vh 0 0 rgba(255,248,220,.57),90.6vw 23.8vh 0 0 rgba(255,248,220,.77),63.4vw 26.8vh 0 0 rgba(255,248,220,.79),94vw 20.6vh 0 0 rgba(255,248,220,.58),58.7vw 18.2vh 0 0 rgba(255,248,220,.65),79.5vw 45.6vh 0 1px rgba(255,248,220,.86),7.8vw 21.2vh 0 1px rgba(255,248,220,.49),99.6vw 31.4vh 0 0 rgba(255,248,220,.52),45.7vw 30.8vh 0 1px rgba(255,248,220,.91),88.5vw 46.3vh 0 0 rgba(255,248,220,.9),7.6vw 0.6vh 0 0 rgba(255,248,220,.57),74.1vw 25.4vh 0 0 rgba(255,248,220,.57),11.8vw 25.4vh 0 1px rgba(255,248,220,.91),63.7vw 48vh 0 1px rgba(255,248,220,.9),18.8vw 50.4vh 0 0 rgba(255,248,220,.79),26.6vw 11.6vh 0 1px rgba(255,248,220,.73),5.2vw 40vh 0 0 rgba(255,248,220,.81),49.8vw 1.7vh 0 1px rgba(255,248,220,.91),13.1vw 35.8vh 0 0 rgba(255,248,220,.47),76.5vw 21.8vh 0 1px rgba(255,248,220,.81),88.7vw 29.1vh 0 0 rgba(255,248,220,.76),19.9vw 16.2vh 0 0 rgba(255,248,220,.95),64.5vw 7vh 0 0 rgba(255,248,220,.73),77.1vw 49.2vh 0 0 rgba(255,248,220,.54),44.7vw 8.6vh 0 0 rgba(255,248,220,.71),75.1vw 1.4vh 0 0 rgba(255,248,220,.72)}
+@keyframes twinkle{from{opacity:.55}to{opacity:1}}
+html[data-theme="dark"] .cloud,html[data-theme="dark"] .cloud:before,html[data-theme="dark"] .cloud:after{background:#2b3962}
+html[data-theme="dark"] .cloud{box-shadow:inset 0 -9px 0 #24315a}
+html[data-theme="dark"] ::selection{background:var(--gold-deep);color:#fff6d9}
+:where(html[data-theme="dark"]) a{color:var(--gold-lite)}
+html[data-theme="dark"] .world-bar>span:nth-child(2){color:var(--on-wood)}
+
+/* Big titles keep the logo's cream lettering with a brown outline. */
+html[data-theme="dark"] :is(.page-head h1,.search-hero h1){color:#f3e2bc;-webkit-text-stroke:2.5px var(--wood-dark);paint-order:stroke fill;text-shadow:0 4px 0 var(--wood-deep),0 8px 20px rgba(0,0,0,.45)}
+html[data-theme="dark"] :is(.page-head p,.search-hero>p){color:var(--ink);text-shadow:0 1px 2px rgba(0,0,0,.6)}
+
+/* Headings and figures inside windows: gold. */
+html[data-theme="dark"] :is(.feature-heading h2,.feature-card strong,.guide h2,.support h3,.item-head h2,.kpi strong,.panel h3,.panel-head h3,.scan-stats strong,
+ .plan strong,.metric strong,.reading strong,.capture-empty strong,.activity-empty strong,.price-feed li>b,.sale-row .amount,#watcher .watcher-prompt h3,
+ .home-tabs button[aria-selected="true"],.route-tabs button[aria-selected="true"],.sign-in-box>p:first-child,.activity>h2,.privacy summary){color:var(--heading);text-shadow:none}
+/* Body text and labels inside windows. */
+html[data-theme="dark"] :is(.secondary,.steps summary,.capture-settings>summary,.steps .ocr-diagnostics summary,.session-title,.status,.status:before,.notice>span,
+ .search-box kbd,.data-table th,#ip-base dd,.rules b,.guide b,.feature-card b,.browse-shortcuts>span,.browse-shortcuts a,.home-tabs button,.route-tabs button,
+ .mg-payment-details summary,.mg-how summary,.site-actions>a,.site-actions #ad-slot .sponsor-open,.site-actions>a.buy-megaphone,.donate-amounts .chip,
+ .sponsor-open,.sponsor-link,#watcher .watcher-guide button,.reading pre,.reading span,.ocr-diagnostics pre,.reader-version,.window-icon,.head-link,.item-links a,
+ .watch-actions select,.privacy a){color:var(--ink);text-shadow:none}
+html[data-theme="dark"] :is(.hint,.price-feed li.empty,.admin-list li.empty,.price-feed li>small,.kpi small,.feature-card small,.guide .eyebrow,.quick-tip .eyebrow,
+ .site-actions #ad-slot>span,.site-actions #ad-content,.google-ad-mock,.mock-ad-label,.mock-ad-size,.watcher-prompt,#watcher .watcher-prompt,
+ #watcher .watcher-prompt .watcher-guide-status,.buy-megaphone-arrow,.nav-label){color:var(--muted);text-shadow:none}
+html[data-theme="dark"] :is(.start-checklist li.ok,.start-checklist li.ok:before,.fm-badge,.loc-src.auto,.scan-blocked,.steps details.done>summary .step-note.required,#item-quality,.live-dot.pulse){color:var(--up)}
+html[data-theme="dark"] .access-note{color:#b5e09a;border-color:#3f6a3a}
+
+/* Windows and insets that had their own light colour. */
+html[data-theme="dark"] :is(.monitor,.activity,.side-card,.guide.compact,.feature-card,.support,.quick-tip,.notice,.status,.metric,.crop-previews>div,
+ .window-tabs,.ad-slot,.scan-location-details,.watcher-prompt,#watcher .watcher-prompt,.site-actions #ad-slot,.site-actions>a,.site-actions>a.buy-megaphone,
+ .buy-megaphone-icon,.google-ad-mock,.access-note,.feature-icon,.feature-watch .feature-icon,.reading>div){background:var(--panel);border-color:var(--cream-line)}
+html[data-theme="dark"] :is(.home-tabs,.route-tabs,#watcher .watcher-guide button,.fm-badge.sold,.fm-badge.skipped,.capture,.step-note.required){background:var(--cream-3);border-color:var(--cream-line)}
+html[data-theme="dark"] :is(.home-tabs button[aria-selected="true"],.route-tabs button[aria-selected="true"]){background:var(--panel);box-shadow:inset 0 -3px 0 var(--gold)}
+html[data-theme="dark"] :is(.search-box,.donate-custom,.sponsor-dialog input,input:focus,textarea:focus,.site-actions #ad-slot .sponsor-open,.secondary){background:var(--cream-2)}
+html[data-theme="dark"] :is(.price-feed li:hover,.data-table tbody tr:hover td,.admin-list li:hover,.site-actions #ad-slot .sponsor-open:hover,.site-actions>a.buy-megaphone:hover,.secondary:hover:not(:disabled),.plan:has(input:checked)){background:var(--panel-hover)}
+html[data-theme="dark"] .status.error{background:#33222b;color:#efb3a4}
+html[data-theme="dark"] .status.warn{background:linear-gradient(90deg,rgba(247,197,63,.1),var(--panel) 60%);color:var(--ink)}
+html[data-theme="dark"] #watcher .watcher-guide button[aria-current="step"]{background:linear-gradient(var(--wood),var(--wood-dark));border-color:var(--gold);color:#fff6d9}
+html[data-theme="dark"] #watcher .guide-number{background:var(--cream-line);color:var(--ink)}
+html[data-theme="dark"] #watcher .watcher-prompt .watcher-guide-status{border-top-color:var(--cream-line)}
+html[data-theme="dark"] .crop-previews canvas{background:#fff}
+html[data-theme="dark"] .item-icon{background:radial-gradient(circle at 34% 26%,var(--art-lite),#3a4566 74%)}
+html[data-theme="dark"] .feature-scene{filter:brightness(.85) saturate(.95);border-color:var(--wood)}
+html[data-theme="dark"] .feature-card{border-color:var(--wood);box-shadow:inset 0 0 0 1px rgba(255,236,190,.06),0 5px 0 rgba(0,0,0,.35)}
+html[data-theme="dark"] .feature-card:hover{border-color:var(--wood-pale);box-shadow:inset 0 0 0 1px rgba(255,236,190,.1),0 9px 0 rgba(0,0,0,.35),0 12px 25px rgba(0,0,0,.3)}
+html[data-theme="dark"] :is(input,select,textarea):not([type=checkbox]):not([type=radio]):not(.world-pick){background-color:var(--cream-2);color:var(--ink);border-color:var(--cream-line)}
+html[data-theme="dark"] input::placeholder,html[data-theme="dark"] textarea::placeholder{color:var(--muted)}
+
+/* Disabled buttons: a flat slate plank instead of a faded wood one, which turned muddy on the dark background. */
+html[data-theme="dark"] button:disabled,html[data-theme="dark"] #watcher .watcher-guide button:disabled{filter:none;opacity:1;background:#262f47;border-color:#3a4664;color:#8c97b2;text-shadow:none;box-shadow:inset 0 1px rgba(255,255,255,.04)}
+html[data-theme="dark"] button:disabled :is(span,strong,small,b){color:inherit}
+
+/* The theme switch, far right of the world bar: a sunken wood groove with a gold sun that slides over and turns into the moon. */
+.world-bar{justify-content:flex-start;gap:14px}
+.world-bar>span:first-child{margin-right:auto}
+/* The switch is now the bar's last child, so the label rules written for span:last-child are restated for the label. */
+.world-bar>span:nth-child(2){font-size:10px;color:var(--cream-2)}
+@media(max-width:760px){.world-bar>span:nth-child(2){display:none}}
+.world-bar .theme-switch,.world-bar .theme-switch:hover:not(:disabled),.world-bar .theme-switch:active:not(:disabled){display:inline-flex;align-items:center;gap:7px;flex:none;margin:0;padding:0;background:none;border:0;box-shadow:none;transform:none;filter:none;color:var(--on-wood);font:inherit;letter-spacing:inherit;text-transform:inherit;text-shadow:inherit;cursor:pointer}
+.theme-switch-label{opacity:.85;transition:opacity .15s}
+.world-bar .theme-switch:hover .theme-switch-label{opacity:1}
+.theme-switch-track{position:relative;width:38px;height:18px;border-radius:9px;background:linear-gradient(#7fc3e6,#cfeaf0);border:1px solid var(--wood-deep);box-shadow:inset 0 2px 3px rgba(61,36,16,.45),0 1px rgba(255,222,160,.35);transition:background .25s}
+.theme-switch-knob{position:absolute;top:1px;left:1px;width:14px;height:14px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff6c2,var(--gold) 55%,#e0a024);border:1px solid var(--gold-deep);box-shadow:0 0 6px rgba(255,214,90,.8);transition:transform .25s cubic-bezier(.4,1.4,.6,1),background .25s,box-shadow .25s}
+.theme-switch[aria-checked="true"] .theme-switch-track{background:linear-gradient(#0d1730,#26365c)}
+.theme-switch[aria-checked="true"] .theme-switch-knob{transform:translateX(20px);background:radial-gradient(circle at 65% 35%,#26365c 0 38%,transparent 40%),radial-gradient(circle at 40% 40%,#fdf6dc,#d9d2b8);border-color:#8a8370;box-shadow:0 0 6px rgba(220,226,255,.6)}
+.world-bar .theme-switch:focus-visible{outline:2px solid var(--gold);outline-offset:3px;border-radius:9px}
+@media(max-width:600px){.theme-switch-label{display:none}}

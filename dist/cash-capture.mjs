@@ -1,5 +1,5 @@
 import {sourcePoint,validRegion}from './capture-geometry.mjs';
-import {client}from './api.mjs?v=ms-2';import {needAccount,SignInNeeded,result}from './community-api.mjs';
+import {client}from './api.mjs?v=ms-4';import {needAccount,SignInNeeded,result}from './community-api.mjs';
 const $=id=>document.getElementById(id),video=$('cash-video'),preview=$('cash-preview');let stream=null,region=null,start=null,confidence=null;
 const note=text=>$('cash-status').textContent=text;
 const run=fn=>async e=>{e?.preventDefault();try{await fn();}catch(err){if(!(err instanceof SignInNeeded))note(err.message);}};

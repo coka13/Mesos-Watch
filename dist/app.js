@@ -1,15 +1,18 @@
 import {numericInkBounds} from './numeric-region.mjs';
-import {ocrImage,TEXT_PASSES,NUMBER_PASSES} from './ocr-prep.mjs?v=prep-1';
+import {ocrImage,TEXT_PASSES,NUMBER_PASSES} from './ocr-prep.mjs?v=prep-2';
 import {detectStoreRegions,enhanceFramePixels,storeRegionsReady} from './auto-select.mjs?v=autoselect-7';
 import {deliverDiscord} from './discord-delivery.mjs';
 import {sourcePoint,validRegion} from './capture-geometry.mjs';
 import {observeChat} from './chat.mjs?v=reader-4';
-import {discordBody,saleEmbed,saleSessionSummary,sampleSaleEmbed} from './notifications.mjs?v=sale-2';
+import {discordBody,saleEmbed,saleSessionSummary,sampleSaleEmbed} from './notifications.mjs?v=sale-4';
 import {createSession,observeStore} from './store-session.mjs?v=ms-5';
 import {chooseSoldReading,chatVisitors,parsePriceList,majorityNumber,STORE_FEE_RATE} from './sold-items.mjs?v=ms-5';
 import {parseTotal,chooseItemReading} from './detection.mjs?v=reader-4';
 import {tsvWords,locateRegions,frameScale,coinScorer} from './locate.mjs?v=autoselect-7';
-import {reportObservations,configured as boardConfigured,matchNames,iconUrl} from './api.mjs?v=ms-2';
+import {reportObservations,configured as boardConfigured,matchNames,iconUrl} from './api.mjs?v=ms-4';
+import * as fm from './fm-location.mjs?v=fm-4';
+import {makeLocation,locationProblems,whereToFind} from './location.mjs?v=loc-1';
+import {needAccount,SignInNeeded,ownStores,saveStore,saveListing,storeListings} from './community-api.mjs';
 const $=id=>document.getElementById(id);
 const video=$('video'),preview=$('preview'),ctx=preview.getContext('2d');
 let stream=null,regions={},mode=null,drag=null,timer=null,watching=false,busy=false,worker=null,workerPromise=null,state=createSession(crypto.randomUUID()),sales=[],frame=null,checking=false;
@@ -20,6 +23,7 @@ let lastAutoDetection={};
 function debugCapture(data){$('capture-debug').textContent=JSON.stringify({source:{width:video.videoWidth,height:video.videoHeight},regions,...lastAutoDetection,...data},null,2);}
 // Debug overlay: region coordinates and the latest OCR result per region, drawn over the preview.
 let lastChat=null,lastReads={},debugOverlay=false;
+let discordReady=false,testing=false,lastSold=null;  // step 03 done; test in flight; latest Sold Items records for the test
 {const t=document.createElement('label');t.className='check';t.innerHTML='<input type="checkbox" id="debug-overlay"> Show coordinates, OCR results and confidence on the preview';debugBox.querySelector('p').after(t);$('debug-overlay').onchange=e=>{debugOverlay=e.target.checked;};}
 // Store name and listed prices stay in this browser. Listed prices let a sale be verified to the exact meso.
 for(const id of ['mystore-name','listed-prices']){const key='mw-'+id;try{$(id).value=localStorage.getItem(key)||'';}catch{}$(id).addEventListener('change',()=>{try{localStorage.setItem(key,$(id).value.slice(0,20000));}catch{}});}
@@ -45,7 +49,7 @@ async function recordVerified(result,r){
   sales.unshift(entry);renderSales();
   if($('share-sales')?.checked&&boardConfigured()&&sale.qty>0&&!sale.unitPriceRange)reportObservations([{kind:'sale',item:entry.names,price:sale.unitPrice,qty:sale.qty}],{world:$('world')?.value||''}).then(n=>{if(n?.length){entry.shared='Shared to price board';renderSales();}}).catch(()=>{});
   if($('webhook').value.trim()){
-   try{await sendEmbed(saleEmbed({...sale,...saleSessionSummary(sales,state.id),balance:r.balance,name:entry.names,icon:entry.icon,store:$('mystore-name').value.trim(),time:entry.time}),r.picture);entry.delivery='Sent to Discord';}
+   try{await sendEmbed(saleEmbed({...sale,...saleSessionSummary(sales,state.id),balance:r.balance,name:entry.names,icon:entry.icon,store:$('mystore-name').value.trim(),location:fm.locationText(fmLoc()),time:entry.time}),r.picture);entry.delivery='Sent to Discord';}
    catch(e){entry.delivery='Discord delivery failed — not retried';status('Sale recorded, but Discord delivery failed: '+e.message,true);}
    renderSales();
   }
@@ -63,9 +67,16 @@ function controls(){
  $('save-item-crop').disabled=!connected||!regions.items||busy;
  for(const id of ['select-total','select-items','select-balance','select-chat','select-sale','auto-detect'])$(id).disabled=!connected||watching||checking||busy;
  $('read').disabled=!connected||!storeRegionsReady(regions)||busy||watching;
- $('start').disabled=!connected||!storeRegionsReady(regions)||watching||busy||checking;
+ // All three steps are required: each is ticked when done, and Start waits for all of them.
+ const steps=[['step-window','01',connected,'Game window shared'],['step-store','02',storeRegionsReady(regions),'Store & mesos found'],['discord-step','03',discordReady,'Discord test delivered']];
+ for(const [id,n,done] of steps){const el=$(id),badge=el.querySelector('summary .step');el.classList.toggle('done',done);badge.textContent=done?'✓':n;badge.setAttribute('aria-label',done?'Step '+n+' done':'Step '+n);}
+ $('start-checklist').replaceChildren(...steps.map(([,,done,label])=>Object.assign(document.createElement('li'),{className:done?'ok':'',textContent:label})));
+ $('start').disabled=!steps.every(s=>s[2])||watching||busy||checking;
+ $('test').disabled=watching||busy||checking||testing;
  $('connect').disabled=watching||checking||busy;$('interval').disabled=watching;$('stop').disabled=!watching;
  $('chat-alerts').disabled=watching||busy;
+ if($('fm-read-room'))fmControls();
+ window.dispatchEvent(new CustomEvent('mesoswatch:setup-progress',{detail:{connected,storeReady:storeRegionsReady(regions),discordReady,watching}}));
 }
 function validWebhook(){const raw=$('webhook').value.trim();let url;try{url=new URL(raw);}catch{throw Error('Paste your Discord webhook URL first.');}if(url.protocol!=='https:'||url.hostname!=='discord.com'||!/^\/api\/webhooks\/\d+\/[\w-]+\/?$/.test(url.pathname))throw Error('Use a Discord channel webhook URL from discord.com.');url.search='';url.hash='';url.searchParams.set('wait','true');return url.href;}
 async function send(content,picture,filename='sold-items.png'){
@@ -74,11 +85,53 @@ async function send(content,picture,filename='sold-items.png'){
  const payload=discordBody(content,blob,filename);
  await deliverDiscord(url,payload);
 }
-$('test').onclick=async()=>{try{$('test').disabled=true;await sendEmbed(sampleSaleEmbed());status('Sample sale notification delivered to Discord. No sale was recorded.');$('discord-step').open=false;}catch(e){status(e.message,true);}finally{$('test').disabled=false;}};
+// Step 03: a TEST alert built from the top (latest) Sold Items record, read now if there is no reading yet; the example
+// sale only when nothing can be read. Delivery ticks the step; editing the URL clears it.
+$('webhook').addEventListener('input',()=>{if(discordReady){discordReady=false;controls();}});
+$('test').onclick=async()=>{if(testing||busy)return;testing=true;controls();try{validWebhook();
+ if(!lastSold?.records?.length&&stream&&storeRegionsReady(regions)&&!watching){busy=checking=true;controls();try{status('Reading your Sold Items for the test…');await reading();}catch{}finally{busy=checking=false;}}
+ const rec=lastSold?.records?.[0];let what='Example sale';
+ if(rec){let item=null;try{const [m]=await matchNames([rec.name.replace(/\.{2,}$/,'')]);if(m?.item_id)item=m;}catch{}
+  await sendEmbed(saleEmbed({name:item?.name||rec.name,qty:rec.qty,buyer:rec.buyer,balance:lastSold.balance??undefined,icon:item?iconUrl({id:item.item_id,game_id:item.game_id,category:item.category,icon_path:item.icon_path,name:item.name}):null,store:$('mystore-name').value.trim(),location:fm.locationText(fmLoc()),time:new Date().toISOString(),test:'latest'}),lastSold.picture);
+  what='Latest sale ('+(item?.name||rec.name)+')';}
+ else await sendEmbed(sampleSaleEmbed());
+ discordReady=true;status(what+' sent to Discord as a TEST. Check your channel: step 3 is done. No sale was recorded.');}
+ catch(e){discordReady=false;status('Discord test failed: '+e.message,true);}finally{testing=false;controls();}};
 function stop(message='Watching stopped. Restart to establish a fresh baseline.') {watching=false;clearTimeout(timer);timer=null;$('badge').classList.remove('live');$('badge').replaceChildren(Object.assign(document.createElement('span'),{className:'dot'}),document.createTextNode(' Not watching'));controls();status(message);}
 $('stop').onclick=()=>stop();
-$('connect').onclick=async()=>{try{if(!navigator.mediaDevices?.getDisplayMedia)throw Error('Screen sharing isn’t available here. Open this page in desktop Chrome or Edge.');if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}stream=await navigator.mediaDevices.getDisplayMedia({video:{frameRate:2},audio:false});video.srcObject=stream;await video.play();regions={};mode=null;stream.getVideoTracks()[0].addEventListener('ended',()=>{stop('Game sharing ended. Reconnect your window to continue.');stream=null;video.srcObject=null;regions={};$('preview').hidden=true;$('capture-empty').hidden=false;controls();window.dispatchEvent(new Event('mesoswatch:capture-ended'));});$('preview').hidden=false;$('capture-empty').hidden=true;$('source-note').textContent='Window connected';window.dispatchEvent(new Event('mesoswatch:capture-started'));cancelAnimationFrame(frame);controls();draw();await autoDetect();}catch(e){status(e.name==='NotAllowedError'?'Window sharing was cancelled. You can try again.':e.message,true);controls();}};
-function draw(){if(!stream)return;const w=video.videoWidth,h=video.videoHeight;if(w&&h&&document.body.dataset.view==='store'&&!document.hidden&&$('capture-details').open){preview.width=w;preview.height=h;ctx.drawImage(video,0,0);for(const [name,r]of Object.entries(regions)){if(typeof r!=='object'||!Number.isFinite(r?.x))continue;if(name==='sale'&&regions.items&&['x','y','w','h'].every(k=>r[k]===regions.items[k]))continue;ctx.strokeStyle=name==='chat'?'#c58be5':name==='sale'?'#e58a81':name==='balance'?'#7ba952':name==='total'?'#e8a53b':'#6aa8d1';ctx.lineWidth=Math.max(2,w/400);ctx.strokeRect(r.x,r.y,r.w,r.h);ctx.fillStyle=ctx.strokeStyle;ctx.font=`${Math.max(12,w/100)}px sans-serif`;if(typeof r!=='object'||!Number.isFinite(r?.x))continue;ctx.fillText((name==='chat'?'SHOP CHAT':name==='sale'?'SALE SNAPSHOT':name==='balance'?'MY MESOS':name==='total'?'TOTAL':'SOLD ITEMS')+(debugOverlay?` ${r.x},${r.y} ${r.w}×${r.h}`+(lastReads[name]?' · '+lastReads[name]:''):''),r.x+4,Math.max(15,r.y-5));}if(drag){ctx.strokeStyle='#fff';ctx.lineWidth=3;ctx.strokeRect(drag.x,drag.y,drag.endX-drag.x,drag.endY-drag.y);}}frame=requestAnimationFrame(draw);}
+$('connect').onclick=async()=>{
+ try{
+  if(!navigator.mediaDevices?.getDisplayMedia)throw Error('Screen sharing isn’t available here. Open this page in desktop Chrome or Edge.');
+  if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}
+  stream=await navigator.mediaDevices.getDisplayMedia({video:{frameRate:2},audio:false});
+  video.srcObject=stream;
+  await video.play();
+  regions={};mode=null;
+  stream.getVideoTracks()[0].addEventListener('ended',()=>{
+   stop('Game sharing ended. Reconnect your window to continue.');
+   stream=null;video.srcObject=null;regions={};
+   $('preview').hidden=true;$('capture-empty').hidden=false;
+   controls();
+   window.dispatchEvent(new Event('mesoswatch:capture-ended'));
+  });
+  $('preview').hidden=false;$('capture-empty').hidden=true;
+  $('source-note').textContent='Window connected';
+  window.dispatchEvent(new Event('mesoswatch:capture-started'));
+  cancelAnimationFrame(frame);controls();draw();
+  await autoDetect();
+ }catch(e){
+  if(stream){
+   stream.getTracks().forEach(t=>t.stop());
+   stream=null;video.srcObject=null;
+   $('preview').hidden=true;$('capture-empty').hidden=false;
+   window.dispatchEvent(new Event('mesoswatch:capture-ended'));
+  }
+  const message=e.name==='NotAllowedError'?'Window sharing was cancelled. You can try again.':e.message;
+  status(message,true);controls();
+  return message;
+ }
+};
+function draw(){if(!stream)return;const w=video.videoWidth,h=video.videoHeight;if(w&&h&&document.body.dataset.view==='store'&&!document.hidden&&$('capture-details').open){if(preview.width!==w)preview.width=w;if(preview.height!==h)preview.height=h;ctx.drawImage(video,0,0);for(const [name,r]of Object.entries(regions)){if(typeof r!=='object'||!Number.isFinite(r?.x))continue;if(name==='sale'&&regions.items&&['x','y','w','h'].every(k=>r[k]===regions.items[k]))continue;ctx.strokeStyle=name==='chat'?'#c58be5':name==='sale'?'#e58a81':name==='balance'?'#7ba952':name==='total'?'#e8a53b':'#6aa8d1';ctx.lineWidth=Math.max(2,w/400);ctx.strokeRect(r.x,r.y,r.w,r.h);ctx.fillStyle=ctx.strokeStyle;ctx.font=`${Math.max(12,w/100)}px sans-serif`;if(typeof r!=='object'||!Number.isFinite(r?.x))continue;ctx.fillText((name==='chat'?'SHOP CHAT':name==='sale'?'SALE SNAPSHOT':name==='balance'?'MY MESOS':name==='total'?'TOTAL':'SOLD ITEMS')+(debugOverlay?` ${r.x},${r.y} ${r.w}×${r.h}`+(lastReads[name]?' · '+lastReads[name]:''):''),r.x+4,Math.max(15,r.y-5));}if(drag){ctx.strokeStyle='#fff';ctx.lineWidth=3;ctx.strokeRect(drag.x,drag.y,drag.endX-drag.x,drag.endY-drag.y);}}frame=requestAnimationFrame(draw);}
 function point(e){const b=preview.getBoundingClientRect();return sourcePoint({x:e.clientX,y:e.clientY},{x:b.left,y:b.top,width:b.width,height:b.height},{width:preview.width,height:preview.height});}
 function selectRegion(name){
  mode=name;$('capture-details').open=true;$('capture-details').parentElement.closest('details').open=true;
@@ -145,6 +198,7 @@ async function reading(){
   $('raw-ocr').textContent=itemReads.map((r,n)=>'Sold Items pass '+(n+1)+':\n'+r.text.trim()).join('\n\n')+(lastChat?'\n\nShop chat:\n'+lastChat.text.trim():'');
   $('ocr-quality').textContent='Sold Items confidence: '+Math.round(sold.confidence)+'% · '+(regions.chat?visitors.length+' visitor name(s) in chat':'shop chat not selected');
   debugCapture({balance,records:sold.records,visitors,confidence:sold.confidence});
+  if(sold.records.length)lastSold={records:sold.records,balance,picture};
   return{mode:'sold-items',balance,records:sold.records,confidence:sold.confidence,visitors,prices:parsePriceList($('listed-prices').value),feeRate:STORE_FEE_RATE,picture,raw:itemReads.map(r=>r.text).join('\n')};
  }
  const chosen=chooseItemReading(i.data,i2.data);
@@ -185,11 +239,11 @@ async function tick(){
    if(notified.has(saleKey)){status('That sale was already recorded. Still watching your store.');return;}
    notified.add(saleKey);
    const entry={time:new Date().toISOString(),sessionId:state.id,initialBalance:state.initialBalance,picture:soldPicture(r.picture),names,amount:result.amount,evidence:result.reason,corroborated:result.corroborated,delivery:$('webhook').value.trim()?'Sending':'Recorded (Discord not connected)'};sales.unshift(entry);renderSales();
-   if(result.corroborated)shareSale(result,r).then(t=>{if(t){entry.shared=t;renderSales();}});
+   if(result.corroborated){shareSale(result,r).then(t=>{if(t){entry.shared=t;renderSales();}});fmRefreshAfterSale();}
    if(!result.corroborated){entry.delivery='Unverified · no Discord sale alert or market contribution';status(result.reason,true);renderSales();if(watching&&$('chat-alerts').checked&&$('webhook').value.trim())await checkChat();return;}
    entry.net=result.amount;
    if($('webhook').value.trim())try{
-    await sendEmbed(saleEmbed({name:names,qty:result.quantity,net:result.amount,...saleSessionSummary(sales,state.id),balance:r.balance,store:$('mystore-name').value.trim(),time:entry.time}),r.picture);
+    await sendEmbed(saleEmbed({name:names,qty:result.quantity,net:result.amount,...saleSessionSummary(sales,state.id),balance:r.balance,store:$('mystore-name').value.trim(),location:fm.locationText(fmLoc()),time:entry.time}),r.picture);
     entry.delivery='Sent to Discord';status('Sale snapshot sent. Still watching your store.');
    }catch(e){entry.delivery='Delivery failed — not retried';stop('Sale snapshot delivery failed. Check your webhook, then restart. '+e.message);$('status').classList.add('error');}
    else status('Sale recorded. Open the optional Send alerts to Discord step to get notified.');
@@ -216,7 +270,7 @@ async function checkChat(){
  }else $('chat-status').textContent=result.kind==='unreadable'?'Chat text is unclear. Keep the selected area visible.':result.kind==='pending'?'New chat text detected; confirming the reading…':result.kind==='reset'?'Chat history changed or scrolled. Baseline reset; keep chat at the bottom.':result.kind==='baseline'?'Chat baseline set. Existing messages will not trigger alerts.':'Watching shop chat · '+chatCount+' new message(s) sent.';
 }
 
-$('start').onclick=async()=>{try{if($('webhook').value.trim())validWebhook();if(!storeRegionsReady(regions))throw Error('Keep Sold Items and personal mesos visible, then run Auto Select. Select Total Sales too only if this layout shows it.');if($('chat-alerts').checked&&$('webhook').value.trim()&&!regions.chat){selectRegion('chat');throw Error('Select the shop-chat area once before starting message alerts.');}chatState={ready:false,keys:[],candidate:null};$('capture-details').open=false;$('crop-details').open=false;state=createSession(crypto.randomUUID());baselineNote.textContent='Session starting mesos: waiting for a reliable reading';watching=true;mode=null;drag=null;$('badge').classList.add('live');$('badge').replaceChildren(Object.assign(document.createElement('span'),{className:'dot'}),document.createTextNode(' Watching'));controls();await tick();}catch(e){stop(e.message);$('status').classList.add('error');}};
+$('start').onclick=async()=>{try{validWebhook();if(!discordReady){$('discord-step').open=true;throw Error('Step 3: press "Send test (latest sale)" and check it arrives in Discord before watching.');}if(!storeRegionsReady(regions))throw Error('Keep Sold Items and personal mesos visible, then run Auto Select. Select Total Sales too only if this layout shows it.');if($('chat-alerts').checked&&$('webhook').value.trim()&&!regions.chat){selectRegion('chat');throw Error('Select the shop-chat area once before starting message alerts.');}chatState={ready:false,keys:[],candidate:null};$('capture-details').open=false;$('crop-details').open=false;state=createSession(crypto.randomUUID());baselineNote.textContent='Session starting mesos: waiting for a reliable reading';watching=true;mode=null;drag=null;$('badge').classList.add('live');$('badge').replaceChildren(Object.assign(document.createElement('span'),{className:'dot'}),document.createTextNode(' Watching'));controls();await tick();}catch(e){stop(e.message);$('status').classList.add('error');}};
 const isChange=e=>['unverified','uncertain','balance-change'].includes(e.kind);
 function row(entry,example=false){const r=document.createElement('div');r.className='sale-row'+(entry.kind==='verified'?' verified':isChange(entry)?' uncertain':'');const time=document.createElement('time');time.textContent=new Date(entry.time).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});const text=document.createElement('div'),name=document.createElement('strong'),note=document.createElement('small');if(entry.icon||entry.picture){const img=Object.assign(document.createElement('img'),{src:entry.icon||entry.picture,alt:entry.icon?'':entry.names+' — store snapshot',width:entry.icon?40:96,height:40,loading:'lazy',className:'item-icon',onerror(){if(entry.picture&&this.src!==entry.picture){this.src=entry.picture;this.width=96;this.alt=entry.names+' — store snapshot';}else this.remove();}});name.append(img);}name.append(document.createTextNode(entry.names+(entry.qty>1?' ×'+entry.qty:'')));note.textContent=example?'Example only · no Discord message sent':entry.kind==='verified'?'Verified · '+(entry.buyer?'buyer '+entry.buyer+' · ':'')+(entry.unitPrice?fmt(entry.unitPrice)+' each · ':'')+'received '+fmt(entry.net)+' after fee · '+entry.delivery:entry.delivery+(entry.evidence&&isChange(entry)?' · '+entry.evidence:'')+' · OCR reading';text.append(name,note);const amount=document.createElement('div');amount.className='amount';amount.replaceChildren(mesoAmt(isChange(entry)?(entry.balanceChange>=0?'+':'')+fmt(entry.balanceChange)+' mesos balance change':'+'+fmt(entry.amount)+' mesos',13));r.append(time,text,amount);return r;}
 function renderSales(){try{localStorage.setItem('mw-sales',JSON.stringify(sales.slice(0,500)));}catch{}$('activity-empty').hidden=sales.length>0;$('sales').replaceChildren(...sales.map(s=>row(s)));$('sale-count').textContent=String(sales.filter(s=>s.corroborated===true).length);$('meso-count').replaceChildren(mesoAmt(fmt(sales.filter(s=>s.corroborated===true).reduce((a,s)=>a+s.amount,0)),13),document.createTextNode(' '),Object.assign(document.createElement('small'),{textContent:'mesos'}));$('export').disabled=!sales.length;}
@@ -300,3 +354,113 @@ async function shareSale(result,r){
  if(!Number.isSafeInteger(price)||price<=0)return'';
  try{const n=await reportObservations([{kind:'sale',item:result.names[0],price,qty}],{world:$('world')?.value||''});return n&&n.length?'Shared to price board':'';}catch(e){return'Not shared: '+e.message;}
 }
+
+// ---- Step 04: Free Market location and the store list, published automatically (optional) ----
+// Room from the expanded minimap in the top-left corner, world and channel from the Change Channel menu, then the store's rows
+// (sold ones are greyed out). A scan publishes to Player Stores straight away once everything is known: the location, store
+// and character name, and for each row an identified item, a price two re-reads agree on, and a clearly sold or for-sale
+// look. Uncertain rows are skipped, never guessed. A recorded sale re-scans the list so the row shows as sold. All reads use
+// the shared window only.
+var fmBusy=false,fmPublished=false;  // var: controls() runs before this part of the module
+// FM room or a named map (a store on Hidden Street), never both.
+function fmLoc(){const room=+$('fm-room').value||null;return{world:$('fm-world').value.trim(),channel:+$('fm-channel').value||null,room,mapName:room?'':$('fm-map').value.trim()};}
+function fmModel(loc){return makeLocation({...loc,roomNumber:loc.room,locationSource:'MANUAL'});}  // hoisted: controls() runs first
+const fmStatus=(text,error=false)=>{$('fm-status').textContent=text;$('fm-status').classList.toggle('error',error);};
+for(const id of ['fm-world','fm-channel','fm-room','fm-map','fm-character']){const key='mw-'+id;try{$(id).value=localStorage.getItem(key)||'';}catch{}$(id).addEventListener('input',()=>{try{localStorage.setItem(key,$(id).value);}catch{}fmControls();});}
+$('fm-store-name').addEventListener('input',()=>{$('mystore-name').value=$('fm-store-name').value;$('mystore-name').dispatchEvent(new Event('change'));});
+function fmControls(){
+ const loc=fmLoc(),idle=!!stream&&!fmBusy&&!checking;
+ $('fm-read-room').disabled=$('fm-read-channel').disabled=!idle;$('fm-read-store').disabled=!idle||!regions.chat;
+ $('fm-room-step').classList.toggle('done',loc.room>=1&&loc.room<=99||fmModel(loc).locationType==='NAMED_MAP');
+ $('fm-channel-step').classList.toggle('done',!!loc.world&&loc.channel>=1&&loc.channel<=40);
+ const problems=locationProblems(fmModel(loc),{needWorld:true});
+ $('fm-where').textContent=problems.length?problems.join(' '):'Where to find your store: '+loc.world+' • '+whereToFind(fmModel(loc))+'.';
+}
+// One source rectangle, prepared like every other OCR crop.
+async function readRect(r,options,psm,chars=''){
+ const c=document.createElement('canvas');c.width=r.w;c.height=r.h;c.getContext('2d').drawImage(video,r.x,r.y,r.w,r.h,0,0,r.w,r.h);
+ const w=await getWorker();await w.setParameters({tessedit_pageseg_mode:psm,tessedit_char_whitelist:chars});
+ return(await w.recognize(prepare(c,options),{},{text:true,tsv:true})).data;
+}
+function framePixels(){const c=document.createElement('canvas');c.width=video.videoWidth;c.height=video.videoHeight;const g=c.getContext('2d',{willReadFrequently:true});g.drawImage(video,0,0);return g.getImageData(0,0,c.width,c.height);}
+// Waits for a watcher reading in progress, then holds the OCR worker.
+const fmTask=fn=>async()=>{if(fmBusy)return;fmBusy=true;fmControls();
+ try{while(busy)await new Promise(r=>setTimeout(r,200));busy=true;controls();if(!stream||!video.videoWidth)throw Error('Share your game window first (step 1).');await fn();}
+ catch(e){if(e instanceof SignInNeeded)fmStatus('Sign in with the form above, then scan again.');else fmStatus(e.message,true);}
+ finally{busy=false;fmBusy=false;controls();fmControls();}};
+const keep=(id,value)=>{$(id).value=value;$(id).dispatchEvent(new Event('input'));};
+$('fm-read-room').onclick=fmTask(async()=>{
+ const W=video.videoWidth,H=video.videoHeight,corner=fm.roomCorner(W,H);fmStatus('Reading the minimap…');
+ // The minimap's blue title panel from pixels; OCR over the corner only when that panel is not found.
+ const found=fm.roomLine(framePixels(),corner);let crop=found?.crop,reads=found?fm.roomLineReads(found.h):fm.ROOM_READS;
+ if(!crop){const line=fm.findRoomLine(fm.toSource(tsvWords((await readRect(corner,fm.ROOM_FIND,'11')).tsv),corner,fm.ROOM_FIND.scale));if(line)crop=fm.roomLineCrop(line,W,H);}
+ if(!crop)throw Error('No "Free Market <room>" in the top-left corner. Expand the minimap (not minimized), drag it to the top-left corner of the game and try again.');
+ const texts=[];for(const o of reads)texts.push((await readRect(crop,o,'7',fm.ROOM_CHARS)).text);
+ let res=fm.readMapLine(texts);
+ if(!res){const names=[];for(const o of fm.MAP_NAME_READS)names.push((await readRect(crop,found?{...o,scale:Math.max(1,Math.round(o.scale*9.5/found.h))}:o,'7')).text);res=fm.readMapLine(texts,names);}
+ if(!res)throw Error('The room number was unclear ('+texts.map(t=>t.trim()).join(' / ')+'). Keep the minimap still and try again, or type the room.');
+ if(res.roomNumber){keep('fm-map','');keep('fm-room',res.roomNumber);fmStatus('Free Market room '+res.roomNumber+' read. Now open the Change Channel menu and press Read channel.');}
+ else{keep('fm-room','');keep('fm-map',res.mapName);fmStatus('Map “'+res.mapName+'” read (not an FM room). Check the name, then open the Change Channel menu and press Read channel.');}
+});
+$('fm-read-channel').onclick=fmTask(async()=>{
+ fmStatus('Looking for the Change Channel menu…');
+ const grid=fm.channelGrid(framePixels());
+ if(!grid)throw Error('Change Channel menu not found. Open it in the game (your channel is the one highlighted in blue) and keep it unobstructed.');
+ const world=fm.parseWorld((await readRect(fm.worldBand(grid,video.videoWidth,video.videoHeight),fm.WORLD_READS[0],'6')).text);
+ keep('fm-channel',grid.channel);if(world)keep('fm-world',world);
+ fmStatus('Channel '+grid.channel+(world?' on '+world:'')+' read.'+(world?'':' The world name was unclear: type it.')+' You can close the menu now.');
+});
+// One scan of the store list: every row checked, then the certain ones published.
+async function fmScanStore(){
+ if(!regions.chat)throw Error('Run Auto Select first (step 2) so your store window and its chat are found.');
+ const loc=fmLoc(),problems=locationProblems(fmModel(loc),{needWorld:true});
+ if(problems.length)throw Error('Nothing published yet. '+problems.join(' '));
+ const W=video.videoWidth,H=video.videoHeight,area=fm.storeListArea(regions.chat,W,H),reads=[];fmStatus('Reading your store items…');
+ for(const o of fm.LIST_READS)reads.push((await readRect(area,o,'6')).tsv);
+ const px=framePixels(),rows=fm.mergeStoreRows(reads.map((t,i)=>fm.parseStoreRows(fm.toSource(tsvWords(t),area,fm.LIST_READS[i].scale))),px);
+ if(!rows.length)throw Error('No store items found left of your shop chat. Keep the store window fully visible and scan again.');
+ // The store name is your Store name field; when that is empty, the store window's title bar.
+ if(!$('mystore-name').value.trim()){const t=fm.storeTitleArea(regions.chat,W,H),title=fm.storeTitle(fm.toSource(tsvWords((await readRect(t,fm.TITLE_READ,'11')).tsv),t,fm.TITLE_READ.scale));if(title){$('mystore-name').value=title;$('mystore-name').dispatchEvent(new Event('change'));}}
+ $('fm-store-name').value=$('mystore-name').value;
+ const name=$('fm-store-name').value.trim(),character=$('fm-character').value.trim();
+ if(name.length<2||character.length<2)throw Error('Nothing published yet. Enter your store name and character name, then scan again.');
+ // Each row: sold or for sale by its look, and its "N for B mesos" re-read until two reads agree.
+ const checked=[],skipped=[];fmStatus('Checking '+rows.length+' rows…');
+ for(const r of rows){
+  const state=fm.rowState(px,fm.rowNameBox(r),r.priceBox);
+  if(state==='uncertain'){skipped.push({...r,why:'neither clearly sold nor for sale'});continue;}
+  const texts=[];for(const o of fm.PRICE_READS)texts.push((await readRect(fm.lineBox(r.priceBox,W,H),{...o,levels:state==='sold'?fm.SOLD_LEVELS:null},'7',fm.PRICE_CHARS)).text);
+  const price=fm.agreedPrice(r,texts);
+  if(!price){skipped.push({...r,why:'price unclear'});continue;}
+  checked.push({...r,...price,sold:state==='sold'});
+ }
+ let matches;try{matches=await matchNames(checked.map(r=>r.item));}catch(e){throw Error('Nothing published: item names could not be checked ('+e.message+').');}
+ const ready=[];
+ for(const r of checked){const m=matches.find(x=>x.input===r.item);if(m?.item_id)ready.push({...r,item_id:m.item_id,name:m.name});else skipped.push({...r,why:'not identified in the catalog'});}
+ fmShow(ready,skipped);
+ if(!ready.length)throw Error('Nothing published: no row was read with certainty. Keep the store window still and fully visible, then scan again.');
+ await needAccount($('fm-status'),'Publishing your store needs a free account.');
+ fmStatus('Publishing…');
+ const existing=(await ownStores()).find(s=>s.world===loc.world&&s.name.toLowerCase()===name.toLowerCase());
+ const store=await saveStore(existing?.id||null,{character_name:character,name,world:loc.world,channel:loc.channel,room:loc.room||null,map_name:loc.room?'':fmModel(loc).mapName,active:true});
+ // Rows already published are refreshed (for sale to sold when greyed out), new rows added; sold history is never removed.
+ const plan=fm.planListingSync(await storeListings(store.id,true),ready);
+ for(const u of plan.updates)await saveListing(u.id,u.patch);
+ for(const r of plan.inserts)await saveListing(null,{store_id:store.id,...r,qty:Math.min(9999,r.qty)});
+ fmPublished=true;
+ const sold=ready.filter(r=>r.sold).length,nowSold=plan.updates.filter(u=>u.nowSold).length;
+ $('fm-status').replaceChildren(document.createTextNode('Published '+ready.length+' item'+(ready.length===1?'':'s')+' ('+(ready.length-sold)+' for sale, '+sold+' sold'+(nowSold?', '+nowSold+' newly sold':'')+') at '+fm.locationText(loc)+' · '+new Date().toLocaleTimeString()+'.'+
+  (skipped.length?' '+skipped.length+' uncertain row'+(skipped.length===1?' was':'s were')+' skipped.':'')+' '),Object.assign(document.createElement('a'),{href:'#stores/'+store.id,textContent:'View your store page →'}));
+ $('fm-status').classList.remove('error');$('fm-publish-step').classList.add('done');
+}
+// What the last scan found: published rows with their status, skipped rows with the reason. Read-only.
+function fmShow(ready,skipped){
+ const badge=(cls,text)=>Object.assign(document.createElement('span'),{className:'fm-badge'+cls,textContent:text});
+ $('fm-items').replaceChildren(...ready.map(r=>{const li=document.createElement('li');li.append(badge(r.sold?' sold':'',r.sold?'Sold':'For sale'),document.createTextNode(r.name+(r.qty>1?' ×'+r.qty:'')),mesoAmt(fmt(r.price)+(r.qty>1?' each':''),13));return li;}),
+  ...skipped.map(r=>{const li=document.createElement('li');li.className='muted';li.append(badge(' skipped','Skipped'),document.createTextNode(r.item),Object.assign(document.createElement('small'),{textContent:r.why}));return li;}));
+ $('fm-items').hidden=!(ready.length||skipped.length);
+}
+$('fm-read-store').onclick=fmTask(fmScanStore);
+// A recorded sale greys out its row in your store: once published, the list is scanned again so it shows as sold.
+function fmRefreshAfterSale(){if(fmPublished&&regions.chat)setTimeout(fmTask(fmScanStore),1500);}
+fmControls();

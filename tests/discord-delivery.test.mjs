@@ -23,4 +23,10 @@ import {saleEmbed,discordBody,sampleSaleEmbed,saleSessionSummary} from '../dist/
  assert.deepEqual(saleSessionSummary(rows,'now'),{sessionNet:21129,sessionSales:2});
  const unknown=saleEmbed({name:null,net:100,time:0});assert.equal(unknown.fields[0].value,'Item name unreadable');assert.ok(!unknown.fields.some(f=>['Sale price','Shop fee','This session','Current mesos balance'].includes(f.name)),'never invent unobserved totals or fees');
  assert.ok(!JSON.stringify(unknown).includes('NaN'));
+ // Step 3 test from the latest Sold Items record: marked TEST, says it is not a new sale, keeps the real item and buyer.
+ const latest=saleEmbed({name:'Metal Koif',qty:1,buyer:'MYMYFem',balance:258809,time:'2026-11-04T10:00:00Z',test:'latest'});
+ assert.match(latest.title,/^TEST/);assert.match(latest.description,/latest Sold Items record.*not a new sale/);
+ assert.equal(latest.fields[0].value,'Metal Koif × 1');assert.equal(latest.fields.find(f=>f.name==='Buyer (OCR)').value,'MYMYFem');
+ assert.ok(!latest.fields.some(f=>['Sale price','You received'].includes(f.name)),'no invented price in the test');
+ assert.equal(saleEmbed({name:'Lemona',qty:1,location:'Windia · Ch 35 · FM 8',time:0}).fields.find(f=>f.name==='Location').value,'Windia · Ch 35 · FM 8','FM location in alerts');
  console.log('Notification integration: sample delivery, totals, fee, session isolation, unknown fields and mention suppression passed. No external message sent.');}

@@ -1,4 +1,4 @@
-import {client} from './api.mjs?v=ms-2';
+import {client} from './api.mjs?v=ms-4';
 export async function result(query){const {data,error}=await query;if(error)throw Error(/42P01|42883|PGRST20[25]/.test(error.code||'')?'This feature needs the platform database migrations.':error.message);return data;}
 export async function account(){const sb=await client();const {data,error}=await sb.auth.getUser();if(error&&!/session missing/i.test(error.message))throw Error(error.message);return data.user?.email?data.user:null;}
 // The emailed link returns to the bare page (Supabase puts the login in the URL fragment), so the page to come back to is kept locally.

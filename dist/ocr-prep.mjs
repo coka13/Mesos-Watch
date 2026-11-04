@@ -26,10 +26,16 @@ export function otsu(gray){
  return t;
 }
 // RGBA image for OCR: upscaled, optionally binarized, inside a white margin (Tesseract misses text touching the edge).
-export function ocrImage(pixels,{scale=6,binarize=false,margin=20}={}){
- const {gray,width,height}=upscaleGray(pixels,scale),t=binarize?otsu(gray):0;
+// Light text on a darker background (the minimap's white title on blue) is inverted: the more common tone is the background.
+// levels [lo,hi] stretches that gray range to full contrast first (the faint gray text of sold store rows).
+export function ocrImage(pixels,{scale=6,binarize=false,margin=20,levels=null}={}){
+ const {gray,width,height}=upscaleGray(pixels,scale);
+ if(levels){const [lo,hi]=levels;for(let i=0;i<gray.length;i++)gray[i]=Math.max(0,Math.min(255,(gray[i]-lo)*255/(hi-lo)));}
+ const t=otsu(gray);
+ let dark=0;for(const v of gray)if(v<=t)dark++;
+ const invert=dark>gray.length/2;
  const W=width+2*margin,H=height+2*margin,data=new Uint8ClampedArray(W*H*4).fill(255);
- for(let y=0;y<height;y++)for(let x=0;x<width;x++){const v=gray[y*width+x],o=((y+margin)*W+x+margin)*4;data[o]=data[o+1]=data[o+2]=binarize?(v<=t?0:255):v;}
+ for(let y=0;y<height;y++)for(let x=0;x<width;x++){const g=gray[y*width+x],v=invert?255-g:g,o=((y+margin)*W+x+margin)*4;data[o]=data[o+1]=data[o+2]=binarize?((invert?g>t:g<=t)?0:255):v;}
  return{data,width:W,height:H};
 }
 // The readings each OCR'd region gets. Two that agree are trusted; three give a tie-breaker.

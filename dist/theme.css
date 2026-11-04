@@ -1,6 +1,6 @@
 /* MapleStory UI theme: overrides maple.css and ocr.css. Load last.
    The login screen, not a blue dialog: wood frames, cream insets, plank buttons, gold lettering,
-   the world.svg scene behind with clouds and falling leaves. Headings carry the logo's brown outline. */
+   the world.svg scene behind with drifting clouds. Headings carry the logo's brown outline. */
 @font-face{font-family:"Maplestory OTF";src:url(fonts/Maplestory_OTF_Light.woff2) format("woff2"),url(fonts/Maplestory_OTF_Light.woff) format("woff");font-weight:300 400;font-style:normal;font-display:swap}
 @font-face{font-family:"Maplestory OTF";src:url(fonts/Maplestory_OTF_Bold.woff2) format("woff2"),url(fonts/Maplestory_OTF_Bold.woff) format("woff");font-weight:500 900;font-style:normal;font-display:swap}
 :root{
@@ -30,26 +30,19 @@ h1,h2,h3,.brand,.section-head h2,.side-card>.eyebrow,.step{font-family:var(--dis
 :focus-visible{outline:3px solid var(--gold);outline-offset:2px}
 a{color:var(--wood)}
 
-/* Sky over the world scene: sun haze, clouds and drifting maple leaves. */
+/* Sky over the world scene: sun haze and drifting clouds. */
 .sky{position:fixed;inset:0;pointer-events:none;z-index:0;overflow:hidden}
 .sky:before{content:"";position:absolute;inset:0;background:radial-gradient(620px 320px at 76% 2%,rgba(255,248,214,.8),rgba(255,248,214,0) 70%)}
 .cloud{position:absolute;width:190px;height:54px;border-radius:46px;background:rgba(255,255,255,.95);box-shadow:0 7px 16px rgba(96,120,80,.28),inset 0 -9px 0 rgba(224,240,248,.95)}
 .cloud:before,.cloud:after{content:"";position:absolute;border-radius:50%;background:#fff}
 .cloud:before{width:80px;height:80px;left:28px;top:-40px}
 .cloud:after{width:56px;height:56px;left:102px;top:-27px}
-.cloud.k1{left:-240px;top:9%;transform:scale(.8);animation:drift 78s linear infinite}
-.cloud.k2{left:-240px;top:26%;transform:scale(1.18);opacity:.85;animation:drift 112s linear infinite;animation-delay:-34s}
-.cloud.k3{left:-240px;top:47%;transform:scale(.6);opacity:.6;animation:drift 92s linear infinite;animation-delay:-60s}
-.cloud.k4{left:-240px;top:4%;transform:scale(1);opacity:.72;animation:drift 138s linear infinite;animation-delay:-100s}
-@keyframes drift{from{margin-left:-240px}to{margin-left:calc(100vw + 280px)}}
-/* four leaves: the in-game Maple Leaf (4001126) and Golden Maple Leaf (4000313) item icons, at 1x or exactly 0.5x so the pixels stay crisp */
-.sky:after{content:"";position:absolute;inset:0;background-repeat:no-repeat;image-rendering:pixelated;background-image:
- url("sprites/maple-leaf.png"),url("sprites/maple-leaf.png"),url("sprites/maple-leaf-gold.png"),url("sprites/maple-leaf.png");
- background-size:28px 28px,14px 14px,29px 29px,14px 14px;
- background-position:12% -40px,72% -90px,38% -140px,88% -60px;
- opacity:.85;animation:leaf-fall 26s linear infinite}
-@keyframes leaf-fall{to{background-position:2% 108vh,84% 112vh,26% 116vh,96% 106vh}}
-@media(prefers-reduced-motion:reduce){.cloud{animation:none;margin-left:6vw}.cloud.k2{margin-left:54vw}.cloud.k3{margin-left:28vw}.cloud.k4{margin-left:72vw}.sky:after{animation:none;opacity:.5;background-position:10% 12%,70% 30%,36% 6%,86% 44%}}
+.cloud.k1{left:-240px;top:9%;--cloud-scale:.8;animation:drift 78s linear infinite}
+.cloud.k2{left:-240px;top:26%;--cloud-scale:1.18;opacity:.85;animation:drift 112s linear infinite;animation-delay:-34s}
+.cloud.k3{left:-240px;top:47%;--cloud-scale:.6;opacity:.6;animation:drift 92s linear infinite;animation-delay:-60s}
+.cloud.k4{left:-240px;top:4%;--cloud-scale:1;opacity:.72;animation:drift 138s linear infinite;animation-delay:-100s}
+@keyframes drift{from{transform:translateX(-240px) scale(var(--cloud-scale))}to{transform:translateX(calc(100vw + 280px)) scale(var(--cloud-scale))}}
+@media(prefers-reduced-motion:reduce){.cloud{animation:none;transform:scale(var(--cloud-scale));margin-left:6vw}.cloud.k2{margin-left:54vw}.cloud.k3{margin-left:28vw}.cloud.k4{margin-left:72vw}}
 .world-bar,header,main,footer{position:relative;z-index:1}
 
 /* Buttons: wooden planks with a hard bottom edge; the main action is gold-lacquered. */
@@ -208,3 +201,36 @@ footer span:last-child{font:700 11px var(--display);color:var(--gold-lite);lette
 .sold-item-icon{object-fit:contain;image-rendering:pixelated;flex:none}
 .sold-items-snapshot{display:block;max-width:100%;max-height:260px;object-fit:contain;object-position:left;margin-top:14px;border-radius:6px;border:1px solid var(--cream-line);image-rendering:pixelated}
 .sale-row .item-icon{object-fit:contain;vertical-align:middle;margin-right:8px;image-rendering:pixelated}
+/* Store Watcher: the three required steps tick when done; Start stays locked until all are. */
+.steps details.done>summary .step{background:linear-gradient(#9fd88a,#5fae4c);border-color:#3f7f33;color:#fff;text-shadow:0 1px rgba(0,0,0,.25)}
+.step-note.required{background:#fbe3d6;border-color:#e2a98a;color:#8a3d1a}
+.steps details.done>summary .step-note.required{background:#e1f2d8;border-color:#9ccb88;color:#2f6a26}
+.start-checklist{list-style:none;margin:10px 0 0;padding:0;display:flex;flex-wrap:wrap;gap:6px 16px;font:700 11px var(--display);color:var(--muted)}
+.start-checklist li:before{content:'○ ';color:#c47a4f}.start-checklist li.ok{color:#2f6a26}.start-checklist li.ok:before{content:'✓ ';color:#3f7f33}
+/* Step 04: FM location and publishing. Each sub-step ticks when done. */
+.fm-steps{margin:6px 0 0;padding-left:20px;display:grid;gap:12px}
+.fm-steps li{padding-left:4px}.fm-steps li::marker{font:700 12px var(--display);color:var(--wood-deep)}
+.fm-steps li.done::marker{content:'✓  ';color:#3f7f33}
+.fm-field{display:inline-flex;align-items:center;gap:6px;font:700 11px var(--display);color:var(--muted);text-transform:uppercase}
+.fm-field input{width:110px;margin:0}.fm-field input[type=number]{width:70px}
+.fm-items li{display:flex;align-items:center;gap:10px}.fm-items label{display:flex;align-items:center;gap:8px;flex:1;margin:0;text-transform:none;font:inherit;color:inherit}
+.fm-badge{font:700 10px var(--display);letter-spacing:.4px;text-transform:uppercase;border-radius:4px;padding:2px 6px;background:#e1f2d8;color:#2f6a26;border:1px solid #9ccb88}
+.fm-badge.sold{background:#efe7dc;color:#7a5b3a;border-color:#d8c3a5}
+.fm-badge.skipped{background:#eceef1;color:#5b6270;border-color:#c9ced6}
+.fm-items small{color:var(--muted)}
+#fm-status:empty{display:none}
+.fm-field input{font:400 14px var(--text);color:var(--ink);background:var(--cream-2);border:2px solid var(--cream-line);border-radius:var(--radius-sm);padding:7px 10px;box-shadow:inset 0 2px 4px rgba(90,54,22,.13)}
+/* FM Scanner location dashboard and Where to find. AUTO values are green, MANUAL ones amber, missing ones muted. */
+.scan-location{margin:10px 0;padding:10px 12px;background:var(--cream-2);border:1px solid var(--cream-line);border-radius:var(--radius-sm)}
+.scan-loc-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px 12px}
+.scan-loc-grid>div{display:flex;flex-direction:column;gap:3px;min-width:0}
+.scan-loc-grid>div>span:first-child{font:700 10px var(--display);text-transform:uppercase;letter-spacing:.6px;color:var(--muted)}
+.scan-loc-grid strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.loc-place{display:flex;flex-wrap:wrap;align-items:center;gap:4px}.loc-place .fm-field input:not([type=number]){width:150px}
+.loc-src{font:700 10px var(--display);letter-spacing:.4px;text-transform:uppercase;color:var(--muted)}
+.loc-src.auto{color:#2f6a26}.loc-src.manual{color:#9a5b00}
+.scan-blocked{margin:8px 0 4px;color:#2f6a26}.scan-blocked.blocked{color:#9a3b1c}
+.price-feed li.sold .item-link{opacity:.75}
+.where-find{white-space:nowrap}.where-find button{margin-left:6px;padding:1px 6px;font-size:11px}
+.listing-filters{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:6px 0}
+.listing-filters input{width:90px;margin:0}

@@ -8,7 +8,8 @@ export function discordBody(content,blob=null,filename='sold-items.png',embeds=n
 
 // A verified My Store sale. Only https icons are attached (Discord fetches them); text fields are length-capped.
 const n=v=>Number(v).toLocaleString('en-US');
-export function saleEmbed({name,qty,gross,net,unitPrice,store,icon,time,buyer,sessionNet,sessionSales,balance,test=false}){
+// test: true for the example sale, 'latest' for a test built from the latest record in the player's Sold Items.
+export function saleEmbed({name,qty,gross,net,unitPrice,store,location,icon,time,buyer,sessionNet,sessionSales,balance,test=false}){
  const known=v=>Number.isSafeInteger(v)&&v>=0;
  const plain=v=>String(v).replace(/[\\`*_~|>]/g,'\\$&');
  const fields=[{name:'Item sold',value:plain(name||'Item name unreadable').slice(0,250)+(known(qty)&&qty>0?' × '+qty:''),inline:false}];
@@ -18,8 +19,9 @@ export function saleEmbed({name,qty,gross,net,unitPrice,store,icon,time,buyer,se
  if(known(sessionNet)&&known(sessionSales))fields.push({name:'This session',value:'**'+n(sessionNet)+' mesos received**\n'+sessionSales+' confirmed '+(sessionSales===1?'sale':'sales'),inline:true});
  if(known(balance))fields.push({name:'Current mesos balance',value:n(balance)+' mesos',inline:true});
  if(store)fields.push({name:'Store',value:String(store).slice(0,100),inline:true});
+ if(location)fields.push({name:'Location',value:String(location).slice(0,100),inline:true});
  if(buyer)fields.push({name:'Buyer (OCR)',value:String(buyer).slice(0,50),inline:true});
- const embed={title:test?'TEST · Shop sale notification':'🛒 Sold in your shop!',description:test?'Example only — no sale or mesos change was recorded.':'A new sale was confirmed from your screen readings.',color:test?0x548b9e:0x4f8a45,fields,timestamp:new Date(time).toISOString(),footer:{text:test?'Mesos-Watch · notification test':'Mesos-Watch · OCR-confirmed sale · current watching session'}};
+ const embed={title:test?'TEST · Shop sale notification':'🛒 Sold in your shop!',description:test==='latest'?'Your latest Sold Items record, sent to test this channel. It is not a new sale and nothing was recorded.':test?'Example only — no sale or mesos change was recorded.':'A new sale was confirmed from your screen readings.',color:test?0x548b9e:0x4f8a45,fields,timestamp:new Date(time).toISOString(),footer:{text:test?'Mesos-Watch · notification test':'Mesos-Watch · OCR-confirmed sale · current watching session'}};
  if(/^https:\/\//.test(icon||''))embed.thumbnail={url:icon};
  return embed;
 }

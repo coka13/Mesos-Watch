@@ -59,6 +59,23 @@ export async function marketTrends(world='',lim=60){
  }
  return list;
 }
+// Market index (migration 20261104000300). Before that migration, market_trends answers instead, with the newer columns empty.
+export async function marketIndex(world='',lim=300){
+ const sb=await client();
+ const {data,error}=await sb.rpc('market_index',{p_world:world,lim});
+ if(!error)return data;
+ if(error.code!=='PGRST202')throw Error('Could not load the market index: '+error.message);
+ return(await marketTrends(world,100)).map(r=>({...r,ask_median:r.median_now,listings_7d:r.asks_7d,for_sale_now:null,sold_seen_7d:null,sales_30d:null,legacy:true}));
+}
+// Reference prices from outside sources (NiaDB), for this world and for all worlds.
+export async function referencePrices(itemId,world=''){
+ const sb=await client(),w=String(world).replace(/["\\,()]/g,'');
+ const {data,error}=await sb.from('reference_prices').select('id,world,source,source_name,source_url,price_type,price_low,price_typical,price_high,sample_size,window_days,as_of,recorded_at,note').eq('item_id',itemId).or(w?`world.eq."${w}",world.eq.""`:'world.eq.""').order('as_of',{ascending:false}).limit(30);
+ if(error){if(/^(PGRST20[25]|42P01)$/.test(error.code||''))return[];throw Error('Could not load reference prices: '+error.message);}
+ return data;
+}
+export async function addReferencePrice(row){const sb=await client();return rows(sb.from('reference_prices').insert(row).select().single(),'Could not save the reference price');}
+export async function removeReferencePrice(id){const sb=await client();return rows(sb.from('reference_prices').delete().eq('id',id).select('id'),'Could not remove the reference price');}
 export async function recentObservations(world='',lim=25){
  const sb=await client();
  const obs=await rows(sb.from('market_observations').select('id,kind,verification_status,item_id,item_name,price,qty,shop_title,map,seen_at').eq('world',world).or('kind.eq.ask,verification_status.eq.verified').order('seen_at',{ascending:false}).limit(lim),'Could not load recent prices');
@@ -70,8 +87,10 @@ export async function recentObservations(world='',lim=25){
 
 export const matchNames=async names=>names.length?rows((await client()).rpc('match_item_names',{p_names:names}),'Could not match item names'):[];
 
-// observations: [{kind:'ask'|'sale', item, price, qty, stats?, shopKey?, shopTitle?, map?, channel?}].
-// Names are resolved against the catalog first; a cut-off name ("…") that matches no single item is dropped.
+// observations: [{kind:'ask'|'sale', item, price, qty, stats?, shopKey?, shopTitle?, map?, channel?, location?}].
+// location: database columns from location.mjs locationColumns (the FM Scanner's listings must carry one; the server checks it).
+// Names are resolved against the catalog first; a cut-off name ("…") that matches no single item is dropped, and so is any
+// FM Scanner name that matches no item.
 export async function reportObservations(observations,{world=''}={}){
  const clean=observations.map(o=>({...o,item:String(o.item||'').replace(/\s+/g,' ').trim(),price:Math.round(Number(o.price)),qty:Math.max(1,Math.min(9999,Math.round(Number(o.qty)||1)))}))
   .filter(o=>o.item.length>=2&&Number.isFinite(o.price)&&o.price>=1&&o.price<=1e11);
@@ -81,16 +100,30 @@ export async function reportObservations(observations,{world=''}={}){
  const out=[];
  for(const o of clean){
   const m=matched.get(o.item),truncated=/(\.\.\.|…)$/.test(o.item);
-  if(!m?.name&&truncated)continue;
-  out.push({kind:o.kind==='sale'?'sale':'ask',world,confidence:Number.isFinite(o.confidence)?Math.max(0,Math.min(100,o.confidence)):null,capture_source:o.kind==='sale'?'store':'scanner',item_name:(m?.name||o.item).slice(0,60),price:o.price,qty:o.qty,stats:o.stats||{},shop_key:String(o.shopKey||'').slice(0,64),shop_title:String(o.shopTitle||'').slice(0,40),map:String(o.map||'').slice(0,40),channel:o.channel>=1&&o.channel<=40?o.channel:null});
+  if(!m?.name&&(truncated||o.source==='scanner'))continue;  // the scanner publishes known items only (the server enforces it too)
+  out.push({kind:o.kind==='sale'?'sale':'ask',world,confidence:Number.isFinite(o.confidence)?Math.max(0,Math.min(100,o.confidence)):null,capture_source:o.source==='scanner'?'scanner':o.kind==='sale'?'store':'scanner',item_name:(m?.name||o.item).slice(0,60),price:o.price,qty:o.qty,stats:o.stats||{},shop_key:String(o.shopKey||'').slice(0,64),shop_title:String(o.shopTitle||'').slice(0,40),map:String(o.map||'').slice(0,40),channel:o.channel>=1&&o.channel<=40?o.channel:null,...(o.location||{})});
  }
  if(!out.length)return [];
- const {data,error}=await sb.from('observations').insert(out).select('id,item_id,item_name');
- if(error)throw Error(/rate limit/i.test(error.message)?'Too many reports from this browser. Scanning resumes in a few minutes.':'Could not save prices: '+error.message);
+ const {data,error}=await sb.from('observations').insert(out).select('id,kind,item_id,item_name');
+ if(error)throw Error(/rate limit/i.test(error.message)?'Too many reports from this browser. Scanning resumes in a few minutes.':/location required/i.test(error.message)?'Not published: the listing has no complete location (channel and FM room or map).':'Could not save prices: '+error.message);
  // Rows the server skipped as duplicates are not returned. catalog: the name matched a catalog item (which has its own icon).
  const catalog=new Set([...matched.values()].filter(m=>m.name&&m.game_id).map(m=>m.name));
  return (data||[]).map(d=>({...d,catalog:catalog.has(d.item_name),item:{id:d.item_id,name:d.item_name,game_id:[...matched.values()].find(m=>m.name===d.item_name)?.game_id}}));
 }
+
+// Greyed-out rows seen in other players' shops: [{item, price (the displayed price), qty, stats?, shopKey?, shopTitle?, confidence?, location}].
+// Kept apart from asking prices and sales. The server drops names that are not known items and repeated sightings.
+export async function reportSoldSightings(list,{world=''}={}){
+ const sb=await session(),matched=new Map((await matchNames([...new Set(list.map(o=>o.item))])).map(m=>[m.input,m]));
+ const out=list.map(o=>({o,m:matched.get(o.item)})).filter(({m})=>m?.name).map(({o,m})=>({world,item_name:m.name.slice(0,60),listed_price:Math.round(o.price),qty:Math.max(1,Math.min(9999,Math.round(o.qty||1))),stats:o.stats||{},
+  shop_key:String(o.shopKey||'').slice(0,64),shop_title:String(o.shopTitle||'').slice(0,40),confidence:Number.isFinite(o.confidence)?Math.max(0,Math.min(100,Math.round(o.confidence))):null,...o.location}));
+ if(!out.length)return [];
+ const {data,error}=await sb.from('sold_sightings').insert(out).select('id,item_id,item_name,listed_price');
+ if(error)throw Error(/rate limit/i.test(error.message)?'Too many reports from this browser. Scanning resumes in a few minutes.':'Could not save sold items: '+error.message);
+ const by=new Map([...matched.values()].filter(m=>m.name).map(m=>[m.name,m]));
+ return (data||[]).map(d=>{const m=by.get(d.item_name);return{...d,item:{id:d.item_id,name:d.item_name,game_id:m?.game_id,category:m?.category,icon_path:m?.icon_path}};});
+}
+export const soldSightings=async(id,world='')=>rows((await client()).from('sold_sightings').select('id,listed_price,qty,stats,shop_title,seller_name,channel,location_type,room,map,seen_at').eq('item_id',id).eq('world',world).gte('seen_at',new Date(Date.now()-7*864e5).toISOString()).order('seen_at',{ascending:false}).limit(50),'Could not load sold items');
 
 // Community icon: an exact-size PNG of the sprite next to a listing. Becomes the item's icon once two players agree.
 export async function shareIcon(itemId,hash,blob){

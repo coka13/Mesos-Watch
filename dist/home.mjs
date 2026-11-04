@@ -1,7 +1,8 @@
 // Home page extras below the price checker: market statistics and community stores. Real counts only; nothing is estimated.
-import {client,configured} from './api.mjs?v=ms-2';
+import {client,configured} from './api.mjs?v=ms-4';
+import {whereToFind} from './location.mjs?v=loc-1';
 import {publicStores} from './community-api.mjs';
-import {ago} from './checker.mjs?v=ms-2';
+import {ago} from './checker.mjs?v=ms-8';
 const $=id=>document.getElementById(id);
 const el=(tag,props={},...kids)=>{const e=Object.assign(document.createElement(tag),props);e.append(...kids.filter(k=>k!=null&&k!==false));return e;};
 const fmt=n=>n==null?'—':Number(n).toLocaleString('en-US');
@@ -29,7 +30,7 @@ export async function loadStores(){
  const list=$('home-stores');if(!list)return;
  if(!configured()){list.replaceChildren(el('li',{className:'empty',textContent:'Player stores appear once the community database is connected.'}));return;}
  try{const stores=(await publicStores($('world')?.value||'')).slice(0,6);
-  list.replaceChildren(...(stores.length?stores.map(s=>el('li',{},el('a',{href:'#stores/'+encodeURIComponent(s.id),textContent:s.name}),el('small',{textContent:[s.character_name,s.world,s.channel?'Ch '+s.channel:'',s.room,'updated '+ago(s.updated_at)].filter(Boolean).join(' · ')}))):[el('li',{className:'empty',textContent:'No player stores published yet. Check back as the community grows.'})]));
+  list.replaceChildren(...(stores.length?stores.map(s=>el('li',{},el('a',{href:'#stores/'+encodeURIComponent(s.id),textContent:s.name}),el('small',{textContent:[s.character_name,s.world,whereToFind(s),'updated '+ago(s.updated_at)].filter(Boolean).join(' · ')}))):[el('li',{className:'empty',textContent:'No player stores published yet. Check back as the community grows.'})]));
  }catch(e){list.replaceChildren(el('li',{className:'empty',textContent:/not set up|PGRST|does not exist|schema cache/i.test(e.message)?'Player stores open once the site owner applies the player-store migration.':e.message}));}
 }
 function refresh(){if(document.body.dataset.view==='checker'&&!$('home')?.hidden){loadStats();loadStores();}}
@@ -37,3 +38,13 @@ window.addEventListener('mesoswatch:view',e=>{if(e.detail.view==='checker'&&!e.d
 window.addEventListener('mesoswatch:observed',()=>loadStats());
 $('world')?.addEventListener('change',refresh);
 refresh();
+
+// Keep every homepage section one click away without a long feed.
+const homeTabs=[...document.querySelectorAll('[data-home-tab]')];
+function selectHomeTab(tab){
+ for(const button of homeTabs){const selected=button===tab;button.setAttribute('aria-selected',String(selected));button.tabIndex=selected?0:-1;document.getElementById(button.getAttribute('aria-controls')).hidden=!selected;}
+}
+for(const [index,tab]of homeTabs.entries()){
+ tab.addEventListener('click',()=>selectHomeTab(tab));
+ tab.addEventListener('keydown',event=>{let next;if(event.key==='ArrowRight')next=(index+1)%homeTabs.length;else if(event.key==='ArrowLeft')next=(index+homeTabs.length-1)%homeTabs.length;else if(event.key==='Home')next=0;else if(event.key==='End')next=homeTabs.length-1;else return;event.preventDefault();selectHomeTab(homeTabs[next]);homeTabs[next].focus();});
+}

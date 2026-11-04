@@ -43,12 +43,14 @@ export function readShop(words){
    nameBox:{x:Math.round(name.x-h*.3),y:Math.round(name.y-h*.25),w:Math.round(name.w+h*.8),h:Math.round(name.h+h*.5)},
    priceBox:{x:Math.round(left),y:Math.round(line.y-h*.3),w:Math.round(line.x+line.w-left+h*.6),h:Math.round(line.h+h*.6)},box:{x:name.x,y:name.y,w:Math.max(name.w,line.x+line.w-name.x),h:line.y+line.h-name.y},icon:{x:Math.round(name.x-h*3.4),y:Math.round(name.y-h*.25),w:Math.round(h*2.9),h:Math.round(h*2.9)}});
  }
- if(!listings.length)return{listings,shopTitle:'',map:'',channel:null,ownStore};
+ if(!listings.length)return{listings,shopTitle:'',titleBox:null,map:'',channel:null,ownStore};
 
  // Title bar: the top line in the listing column, well above the first listing, that is not a button or a number.
  const first=listings.reduce((a,b)=>a.box.y<b.box.y?a:b),hh=first.box.h/2;
  const title=lines.filter(l=>l.y<first.box.y-hh*5&&first.box.y-l.y<hh*14&&l.x>first.box.x-hh*5&&l.x<first.box.x+hh*12&&l.conf>=40&&!BUTTONS.test(l.text.trim())&&/[A-Za-z]{2}/.test(l.text)&&!/^[\d,.\s]+$/.test(l.text)).sort((a,b)=>a.y-b.y)[0];
  const shopTitle=title?cleanName(title.text).slice(0,40):'';
+ // Where the title was found, padded, so the scanner can re-read it from a smooth enlarged crop (full-frame OCR splits names).
+ const titleBox=title?{x:Math.round(title.x-title.h*.6),y:Math.round(title.y-title.h*.4),w:Math.round(title.w+title.h*1.2),h:Math.round(title.h*1.8)}:null;
 
  // Tooltip: a cluster of stat lines whose heading repeats one of the listed names (the item under the cursor).
  const statLines=lines.map(l=>({l,s:statLine(l.text)})).filter(x=>x.s);
@@ -65,13 +67,14 @@ export function readShop(words){
  // Minimap titles read "<Free Market> Free Market Entrance": keep the room name after the region tag.
  const map=mapLine?cleanName(mapLine.text.replace(/^.*[>\]]\s*(?=\S)/,'').replace(/^[<\[]\s*/,'')).slice(0,40):'';
  const ch=lines.map(l=>/\bch(?:annel)?\.?\s*(\d{1,2})\b/i.exec(l.text)).find(Boolean);
- return{listings,shopTitle,map,channel:ch?+ch[1]:null,ownStore};
+ return{listings,shopTitle,titleBox,map,channel:ch?+ch[1]:null,ownStore};
 }
 
 export const readShopListings=words=>readShop(words).listings.filter(l=>l.certain).map(({item,price,qty})=>({item,price,qty}));
 
 // Two scans must agree before a listing is trusted, as with sale totals.
-export const listingKey=l=>l.item.toLowerCase()+'|'+l.price+'|'+JSON.stringify(l.stats||{});
+// A row that turns grey (sold) or reads ambiguously (uncertain) is a different observation from the same row for sale.
+export const listingKey=l=>l.item.toLowerCase()+'|'+l.price+'|'+JSON.stringify(l.stats||{})+(l.state&&l.state!=='active'?'|'+l.state:l.sold?'|sold':'');
 export function confirmed(previous,current){const seen=new Set(previous.map(listingKey));return current.filter(l=>seen.has(listingKey(l)));}
 
 // 64-bit average hash of an icon (8x8 grayscale), as 16 hex digits, for matching icons between players.

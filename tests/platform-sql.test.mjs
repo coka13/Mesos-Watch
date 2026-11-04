@@ -32,6 +32,11 @@ assert.equal((await as(B,`update player_stores set name='Hijacked' where id=$1 r
 assert.equal((await as(B,`delete from player_listings where id=$1 returning id`,[listing.id])).length,0);
 await assert.rejects(as(B,`insert into player_listings(store_id,item_id,qty,price)values($1,$2,1,99)`,[store.id,id]),/row-level security/);
 assert.equal((await db.query(`select count(*)::int n from public_player_listings where store_id=$1`,[store.id])).rows[0].n,1);
+// Sold rows from the owner's store list stay public with their flag; only the owner can set it.
+const soldRow=(await as(A,`insert into player_listings(store_id,item_id,qty,price,sold)values($1,$2,1,1679,true)returning id`,[store.id,id]))[0];
+assert.deepEqual((await db.query(`select sold from public_player_listings where store_id=$1 order by sold`,[store.id])).rows.map(r=>r.sold),[false,true]);
+assert.equal((await as(B,`update player_listings set sold=false where id=$1 returning id`,[soldRow.id])).length,0,'foreign owners cannot change sold');
+await as(A,`delete from player_listings where id=$1`,[soldRow.id]);
 await as(A,`update player_listings set qty=3 where id=$1`,[listing.id]);
 await db.query(`update player_listings set expires_at=now()-interval '1 day' where id=$1`,[listing.id]);
 // The guard refreshes expiry on every update, so advance time using the trigger-free isolated fixture setup.

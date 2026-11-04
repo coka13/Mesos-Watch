@@ -12,6 +12,18 @@ The 2026-11-02 audit (anon key only) was wrong: production actually had only 000
 - Active megaphone plans are now basic30/premium120/featured360 ($1.99/$3.99/$5.99). Sponsor plans are s7 ($15) and s30 ($45).
 - Still to do: deploy the edge functions (step 4 and Payments below) and publish `dist/`.
 
+## Market parity, price sources and NiaDB (applied 2026-11-05)
+
+Applied to production with `run-sql.mjs`: migration `20261104000300_market_parity.sql`, then `supabase/cleanup/20261105_duplicate_listings.sql`. Both are backward compatible with the previously published `dist/`. Publish the new `dist/` to show the new figures; until then the old site keeps working.
+
+- **One listing, one row.** Shop titles are OCR and vary between reads, so a repeat of the same listing (same place, item, price, quantity and stats within 6 hours, from a shop whose title is the same, unread, or similar by trigram ≥ 0.3) now updates `last_seen_at`, `seen_count` and `confirmed_by` on the original instead of adding a row. Sold sightings use the same shop match. The cleanup folded the 6 duplicates already in production (ids 7, 19–22, 24) into their originals; undo with `20261105_duplicate_listings_rollback.sql`.
+- **Statistics** (`item_summary`, `price_history`, new `market_index`) count distinct listings and use `percentile_disc`, so every median and middle-half bound is a price that was actually observed.
+- **Three kinds of price, never mixed:** asking (FM Scanner listings), seen sold (listed price on a greyed-out row) and confirmed sales (admin-reviewed). Every figure on the site shows its source name, data type and time. Below 3 distinct listings (4 for a middle-half range, 3 seen-sold rows, 3 sales from 2 sellers) the site shows "Insufficient data" instead of a figure. Thresholds live in `dist/price-source.mjs`.
+- **NiaDB reference prices** (`reference_prices`) are a separate baseline, shown in the item page's Base item panel and never used in market statistics. NiaDB's reuse policy (https://meowdb.com/reuse) allows individual facts with a link to the specific page, but crawling, its API, its data files and bulk republishing need written permission (email contact@meowdb.com, subject "Permission request: Mesos-Watch"). So:
+  - Admins add single figures on an item page (Base item → "Add a reference price from NiaDB"). The NiaDB item-page URL, NiaDB's date and the price type are required; the database rejects other sites and homepage links.
+  - Bulk import only from a file NiaDB has permitted: `node scripts/import-reference-prices.mjs --file prices.json --permission "<who granted it, how, when>" [--dry-run]`. It never downloads anything, and it checks every row before writing.
+  - No NiaDB data has been imported. Nothing on the site fetches from NiaDB.
+
 ## Deployment order
 
 1. Put the Session pooler connection string in `.env.local` as `SUPABASE_DB_URL` (never commit it).

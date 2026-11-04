@@ -166,7 +166,7 @@ console.log('Shop listing checks passed: names, per-item prices, bundles, low co
  assert.ok(!/NaN|undefined/.test(svg));
  assert.ok(chartSvg([],{now}).includes('No prices recorded'));
  assert.ok(!chartSvg([{bucket:'2026-11-01T00:00:00Z',kind:'ask',low:1,median:1,high:1,n:1}],{now}).includes('<script'));
- assert.deepEqual([shortMesos(950),shortMesos(24679),shortMesos(1250000),shortMesos(2e9)],['950','24.7K','1.3M','2B']);
+ assert.deepEqual([shortMesos(950),shortMesos(24679),shortMesos(1250000),shortMesos(2e9)],['950','24,679','1,250,000','2,000,000,000']);
  const {toRows,toSql}=await import('./supabase/import-catalog.mjs');
  const rows=toRows([{id:1051022,name:'Grey  Skull Overall',category:'Equipment'},{id:1050012,name:'Grey Skull Overall',category:'Equipment',sub_category:'Overall',req_classes:['Warrior'],stats:{reqLevel:30,incPDD:20,incSTR:0},description:'A #cgrey#k overall.\nWarm.'},{id:4031000,name:'Quest Letter',category:'Etc',stats:{quest:1}},{id:1002000,name:'Bound Hat',category:'Equipment',stats:{tradeBlock:1}},{id:2000000,name:"Red Potion",category:'Consumable',spec:{hp:100}},{id:1,name:'X'}]);
  assert.deepEqual(rows.map(r=>[r.game_id,r.category]),[[1050012,'equip'],[2000000,'use']]);

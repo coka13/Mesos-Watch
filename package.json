@@ -4,7 +4,8 @@
   "type": "module",
   "description": "MapleStory Classic community FM price checker. The site is the static dist/ folder; supabase/ holds the database and payment functions.",
   "scripts": {
-    "test": "node check.mjs && node tests/store-session.test.mjs && node tests/store-reference.test.mjs && node tests/capture-geometry.test.mjs && node tests/auto-select.test.mjs && node tests/trading.test.mjs && node tests/discord-delivery.test.mjs && node tests/payments.test.mjs && node tests/pay-rules.test.mjs && node tests/pay-sql.test.mjs && node supabase/tests/sql.test.mjs && node supabase/tests/cleanup.test.mjs && node supabase/tests/megaphone-items.test.mjs && node tests/platform-sql.test.mjs && node scripts/verify.mjs",
+    "test": "node check.mjs && node tests/store-session.test.mjs && node tests/store-reference.test.mjs && node tests/fm-location.test.mjs && node tests/location.test.mjs && node tests/location-sql.test.mjs && node tests/scanner-publish-sql.test.mjs && node tests/market-parity-sql.test.mjs && node tests/shop-identity.test.mjs && node tests/reference-import.test.mjs && node tests/capture-geometry.test.mjs && node tests/auto-select.test.mjs && node tests/trading.test.mjs && node tests/discord-delivery.test.mjs && node tests/payments.test.mjs && node tests/pay-rules.test.mjs && node tests/pay-sql.test.mjs && node supabase/tests/sql.test.mjs && node supabase/tests/cleanup.test.mjs && node supabase/tests/duplicate-cleanup.test.mjs && node supabase/tests/megaphone-items.test.mjs && node tests/platform-sql.test.mjs && node scripts/verify.mjs",
+    "test:ocr": "node tests/fm-room-ocr.test.mjs",
     "import-catalog": "node supabase/import-catalog.mjs",
     "preview": "node scripts/preview.mjs",
     "verify": "node scripts/verify.mjs"

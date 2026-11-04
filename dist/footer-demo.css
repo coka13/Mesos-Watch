@@ -1,0 +1,9 @@
+.ad-test { display: flex; align-items: center; gap: 10px; text-align: left; }
+.ad-test img, .footer-logo { flex: none; object-fit: contain; }
+.ad-test small, .ad-test strong { display: block; }
+.ad-test p { margin: 4px 0 0; }
+body > footer .footer-brand { display: inline-flex; align-items: center; gap: 9px; }
+:root[data-theme="dark"] body > footer {
+  background: linear-gradient(#203a40, #14282d);
+  border-color: #48676b;
+}

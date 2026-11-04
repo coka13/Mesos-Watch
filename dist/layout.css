@@ -1,0 +1,441 @@
+
+/* Shared shell. Loaded after every theme so routes cannot change the frame. */
+:root{--shell-width:1760px;--shell-gutter:clamp(12px,2vw,32px)}
+html{scrollbar-gutter:stable}
+body{align-items:stretch;min-width:0;box-sizing:border-box}
+body>header,body>main,body>footer,body>.footer-parade{
+ width:min(var(--shell-width),calc(100% - 2 * var(--shell-gutter)));
+ max-width:none;min-width:0;margin-left:auto;margin-right:auto;box-sizing:border-box;
+ align-self:center;
+}
+body>main{padding:0;align-items:stretch}
+body>main>.view{width:100%;max-width:none;margin:0;box-sizing:border-box;align-self:stretch}
+body>main>.view>.page-head,body>main>.view>.workspace,body>main>.view>#home{width:100%;box-sizing:border-box}
+body>.footer-parade,body[data-view="checker"]>.footer-parade,body[data-view="checker"]:has(#home:not([hidden]))>.footer-parade{
+ position:relative;z-index:1;flex:0 0 36px;height:36px;min-height:36px;margin-top:0;margin-bottom:0;
+ background:none;border:0;border-radius:0;box-shadow:none;overflow:hidden;
+}
+body>.footer-parade .mob{bottom:0}
+body>.footer-parade .mob img{max-height:34px}
+body>footer{flex-wrap:wrap;justify-content:space-between;gap:6px 16px;padding:9px 16px;margin-top:0;min-height:38px;height:auto}
+@media(min-width:981px) and (min-height:600px){
+ body>main{flex:1 1 0;min-height:0;display:flex;flex-direction:column;overflow:visible}
+ body>main>.view:not([hidden]){width:100%;flex:1 1 0;min-height:0;overflow-y:auto;scrollbar-gutter:stable both-edges;overflow-x:hidden}
+ body[data-view="checker"]:has(#home:not([hidden]))>main>.view[data-view="checker"]{overflow-y:auto;scrollbar-gutter:stable both-edges;padding-bottom:0}
+ body>footer,body[data-view="checker"]:has(#home:not([hidden]))>footer{flex:0 0 38px;height:38px;min-height:38px;margin-top:0;padding:7px 16px}
+}
+@media(max-width:760px){
+ body>footer{justify-content:center;text-align:center;padding:10px;font-size:11px}
+ body>.footer-parade{margin-top:10px}
+}
+
+/* Grid alignment had carried into the desktop flex column, shrinking its children. */
+body[data-view="checker"] #home{align-items:stretch;width:100%;margin-inline:auto}
+body[data-view="checker"] #home>.feature-hub,
+body[data-view="checker"] #home>.home-explore{width:100%;max-width:none;align-self:stretch;margin-left:auto;margin-right:auto;box-sizing:border-box}
+.feature-grid,.home-tabs,.home-panel{width:100%;box-sizing:border-box}
+
+/* Keep the MapleStory face, with clear counters and natural spacing. */
+body[data-view="checker"] .search-hero h1{
+ font-weight:400;letter-spacing:0;line-height:1.25;
+ -webkit-text-stroke:0;text-shadow:none;paint-order:normal;font-synthesis:none;
+}
+
+/* Original MapleStory bold face with open spacing, no thickening effects. */
+h1,h2,h3,.page-head h1,.section-head h2,body[data-view="checker"] .search-hero h1{
+ font-family:var(--display);font-weight:700;font-synthesis:none;
+ -webkit-text-stroke:0;text-shadow:none;paint-order:normal;letter-spacing:.35px;line-height:1.3;
+}
+body>#mega-strip,body>.site-actions{width:min(var(--shell-width),calc(100% - 2 * var(--shell-gutter)));max-width:none;box-sizing:border-box;align-self:center;margin-inline:auto;flex:0 0 auto;position:relative;z-index:3}
+body>#mega-strip{margin-top:0;margin-bottom:6px;min-height:36px;padding:7px 12px;font-size:13px;box-shadow:0 2px 0 #69421f40}
+body>#mega-strip .mega-info{flex:none;color:#fff6d9;text-decoration:underline}
+.site-actions{display:flex;align-items:center;gap:10px;margin-bottom:8px;min-height:34px}
+.site-actions>button,.site-actions>a,.site-actions .sponsor-open{font:700 12px var(--text);padding:7px 12px;white-space:nowrap}
+.site-actions>a{border:1px solid #ad8950;background:#fff7e5;border-radius:6px;color:#543b20}
+.site-actions #ad-slot{display:flex;align-items:center;justify-content:flex-end;gap:10px;flex:1;min-width:0;padding:0;margin:0;background:transparent;border:0;box-shadow:none}
+.site-actions #ad-slot>span{font:400 10px var(--text);background:none;border:0;color:#675339;padding:0}
+.site-actions #ad-content{padding:0;margin:0;min-height:0;min-width:0;max-width:360px;overflow:hidden;font:400 12px var(--text)}
+.site-actions #ad-content>.ad-symbol,.site-actions #ad-content>p{display:none}
+.site-actions #ad-content>strong{font-size:12px;font-weight:400}
+.site-actions #ad-content img{max-height:30px;max-width:180px;object-fit:contain}
+.donation-dialog{width:min(480px,calc(100% - 24px));max-height:85dvh;overflow:auto;padding:16px;border:2px solid var(--wood);border-radius:12px;background:var(--cream);color:var(--ink)}
+.donation-dialog::backdrop{background:#30231499}
+.donation-dialog #support{border:0;box-shadow:none;margin:0;padding:0 12px 12px}
+.dialog-close{display:flex;justify-content:flex-end;margin:0 0 8px}
+@media(max-width:760px){body>#mega-strip{flex-wrap:wrap;gap:6px}body>#mega-strip .mega-text{flex:1 1 60%;white-space:normal;line-height:1.5}body>#mega-strip .mega-info{font-size:11px}.site-actions{flex-wrap:wrap;gap:6px}.site-actions #ad-slot{flex:1 1 100%;justify-content:space-between}.site-actions #ad-slot>span{display:none}.site-actions>button,.site-actions>a,.site-actions .sponsor-open{font-size:11px;padding:7px 9px}.section-head{flex-wrap:wrap;gap:6px}.page-head p{max-width:100%;overflow-wrap:anywhere}}
+
+/* Plain megaphone label; only its icon moves so the text stays readable. */
+body>#mega-strip .mega-label{display:inline-flex;align-items:center;gap:6px;background:none;border:0;box-shadow:none;padding:3px 2px;color:#fff9ed;text-shadow:none}
+.megaphone-motion{display:inline-block;font-size:18px;transform-origin:45% 65%;animation:megaphone-call 2.8s ease-in-out infinite}
+@keyframes megaphone-call{0%,55%,100%{transform:rotate(0) scale(1)}10%{transform:rotate(-12deg) scale(1.12)}20%{transform:rotate(9deg) scale(1.12)}30%{transform:rotate(-7deg) scale(1.08)}40%{transform:rotate(4deg) scale(1.04)}}
+@media(prefers-reduced-motion:reduce){.megaphone-motion{animation:none}}
+
+/* Game-style announcement roll: outgoing line up, next line in from below. */
+body>#mega-strip #mega-text{position:relative;display:block;height:24px;line-height:24px;overflow:hidden;white-space:nowrap;min-width:0}
+.mega-line{display:flex;align-items:center;gap:5px;width:100%;height:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mega-line.outgoing{position:absolute;inset:0;pointer-events:none}
+.mega-line b{color:#ffeab1;flex:none}
+body>#mega-strip .megaphone-motion{animation:none}
+body>#mega-strip #mega-pos{font-size:11px;opacity:.85;font-variant-numeric:tabular-nums;min-width:24px}
+@media(max-width:760px){body>#mega-strip #mega-text{flex:1 1 100%;order:3;height:44px;line-height:20px}.mega-line{white-space:normal;display:block;padding-block:2px}.mega-line b{display:inline}body>#mega-strip .mega-info{margin-left:auto}}
+
+/* Original red Megaphone iconRaw: no cash-coin overlay. */
+body>#mega-strip .megaphone-motion{display:block;width:32px;height:32px;object-fit:contain;flex:none;animation:none}
+body>#mega-strip #mega-text{height:30px;line-height:30px;white-space:nowrap;overflow:hidden}
+body>#mega-strip .mega-line{width:max-content;max-width:none;display:flex;height:30px;align-items:center;white-space:nowrap;overflow:visible;will-change:transform;padding:0}
+@media(max-width:760px){body>#mega-strip #mega-text{height:30px;line-height:30px}body>#mega-strip .mega-line{display:flex;white-space:nowrap;height:30px}}
+@media(prefers-reduced-motion:reduce){body>#mega-strip .mega-line{width:100%;white-space:normal;overflow:auto;will-change:auto}body>#mega-strip #mega-text{height:auto;min-height:30px}body>#mega-strip .mega-line{height:auto;min-height:30px}}
+
+/* Home title follows the same open page-header treatment as the other tools. */
+body[data-view="checker"] .search-hero,
+body[data-view="checker"]:has(#home:not([hidden])) .search-hero{
+ background:none;border:0;border-radius:0;box-shadow:none;
+ padding:6px 4px 16px;margin-bottom:0;
+ grid-template-columns:1fr 1fr;gap:6px 24px;
+}
+body[data-view="checker"] .search-hero h1,
+body[data-view="checker"]:has(#home:not([hidden])) .search-hero h1{
+ font-size:2.1rem;font-weight:700;letter-spacing:.35px;line-height:1.3;margin:0 0 2px;
+}
+body[data-view="checker"] .search-hero>p{font-size:15px;line-height:1.75;margin:0}
+body[data-view="checker"] .search-box{grid-row:1/3}
+@media(max-width:760px){
+ body[data-view="checker"] .search-hero,
+ body[data-view="checker"]:has(#home:not([hidden])) .search-hero{grid-template-columns:1fr;padding:6px 4px 16px}
+ body[data-view="checker"] .search-hero h1,
+ body[data-view="checker"]:has(#home:not([hidden])) .search-hero h1{font-size:1.8rem}
+ body[data-view="checker"] .search-box{grid-row:auto;grid-column:1}
+}
+
+/* Compact sponsor placement with a real button instead of a dashed placeholder. */
+.site-actions #ad-slot{
+ flex:0 1 650px;margin-left:auto;padding:7px 9px 7px 13px;
+ background:linear-gradient(110deg,#fffdf4,#f7edda);border:1px solid #c6a874;
+ border-radius:10px;box-shadow:inset 0 1px #fff,0 2px 0 #77542b18;
+ gap:12px;justify-content:flex-start;
+}
+.site-actions #ad-slot>span{display:block;flex:none;font:700 9px/1.3 var(--text);letter-spacing:1px;color:#816943;white-space:nowrap}
+.site-actions #ad-content{flex:1;max-width:none;line-height:1.4;color:#5c4326}
+.site-actions #ad-content>strong{font:400 13px/1.4 var(--text)}
+.site-actions #ad-slot .sponsor-open{
+ flex:none;width:auto;max-width:100%;margin:0;padding:8px 15px;
+ border:1px solid #795126;border-radius:7px;background:linear-gradient(#bc8b4b,#92622e);
+ color:#fff9eb;font:700 12px/1.4 var(--text);text-shadow:none;
+ box-shadow:inset 0 1px #efc88b88,0 2px 0 #65411f28;transition:background .18s,box-shadow .18s;
+}
+.site-actions #ad-slot .sponsor-open:hover{background:linear-gradient(#c99b5b,#a27038);box-shadow:inset 0 1px #f8d9a5,0 3px 6px #65411f20}
+.site-actions #ad-slot .sponsor-open:focus-visible{outline:3px solid #456d7b;outline-offset:3px}
+@media(max-width:760px){.site-actions #ad-slot{flex:1 1 100%;margin-left:0;gap:9px;padding:8px 10px}.site-actions #ad-slot>span{font-size:8px;letter-spacing:.5px}.site-actions #ad-content>strong{font-size:12px}.site-actions #ad-slot .sponsor-open{font-size:11px;padding:7px 10px}}
+@media(max-width:420px){.site-actions #ad-slot{flex-wrap:wrap}.site-actions #ad-slot>span{flex-basis:100%}.site-actions #ad-content{flex:1 1 120px}}
+
+/* Restore the larger brand and full-width sponsor placement. */
+body>header .brand .logo,
+body[data-view="checker"]>header .brand .logo,
+body[data-view="checker"]:has(#home:not([hidden]))>header .brand .logo{height:90px;width:auto;max-width:190px}
+body>header,body[data-view="checker"]>header,body[data-view="checker"]:has(#home:not([hidden]))>header{min-height:98px;padding-block:4px}
+.site-actions #ad-slot{flex:1 1 auto;max-width:none;margin-left:0;padding:0;border:0;background:none;box-shadow:none;gap:12px}
+.site-actions #ad-slot .sponsor-open{flex:1 1 auto;width:auto;min-width:150px;border:1px dashed #a77a3d;background:#fffdf2;color:#6b471d;box-shadow:none;min-height:34px}
+.site-actions #ad-slot .sponsor-open:hover{background:#fff2d0;box-shadow:none}
+.site-actions #ad-content{flex:0 1 auto;max-width:200px}
+.google-ad-mock{box-sizing:border-box;display:flex;align-items:center;justify-content:center;gap:16px;min-width:0;padding:10px 16px;background:#ffffff70;border:1px dashed #9aab9b;border-radius:8px;color:#617264;font-family:Arial,sans-serif;text-shadow:none}
+.global-ad-mock{position:relative;z-index:1;align-self:center;width:min(var(--shell-width),calc(100% - 2 * var(--shell-gutter)));flex:0 0 48px;min-height:48px;margin:0 auto 8px}
+.mock-ad-label{font-size:9px;letter-spacing:1.3px;color:#718273}
+.mock-ad-title{font-size:12px;font-weight:600}.mock-ad-size{font-size:11px;color:#78867a}
+.page-ad-mock{margin:18px 0 8px;min-height:90px;flex:0 0 auto}
+#home-panel-guide>.page-ad-mock{grid-column:1/-1;min-height:64px}
+@media(max-width:1100px){.site-actions #ad-content{display:none}}
+@media(max-width:760px){body>header .brand .logo,body[data-view="checker"]>header .brand .logo,body[data-view="checker"]:has(#home:not([hidden]))>header .brand .logo{height:70px;max-width:145px}body>header,body[data-view="checker"]>header{min-height:78px}.site-actions #ad-slot{flex:1 1 100%;gap:8px}.global-ad-mock{gap:8px;padding:8px;flex-wrap:wrap;min-height:52px;flex-basis:auto}.google-ad-mock .mock-ad-size{font-size:10px}.google-ad-mock{gap:8px}.page-ad-mock{flex-direction:column;min-height:100px}.mock-ad-label{font-size:8px}}
+
+/* Every route occupies the exact same grid cell, with no content-sized flex widths. */
+body>main{
+ display:grid!important;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr);
+ justify-items:stretch;align-items:stretch;min-width:0;padding:0;
+}
+body>main>.view:not([hidden]){
+ grid-area:1/1;justify-self:stretch;align-self:stretch;
+ width:100%!important;max-width:none!important;min-width:0;
+ margin:0!important;box-sizing:border-box;
+}
+body>main>.view>.page-head{width:100%;max-width:none;box-sizing:border-box}
+body>main>.view>.workspace,body>main>.view>.two-col,
+body>main>.view>.activity,body>main>.view>.panel,
+body>main>.view>.admin-list,body>main>.view>.price-feed,
+body>main>.view>.privacy,body>main>.view>.home-grid{
+ width:100%;max-width:none;min-width:0;box-sizing:border-box;margin-left:0;margin-right:0;
+}
+body>main>.view>.workspace{display:grid;grid-template-columns:minmax(0,1fr) minmax(240px,300px);gap:18px}
+body>main>.view>.workspace>*{min-width:0;width:100%;box-sizing:border-box}
+body>main>.view .community-form>*{min-width:0;max-width:100%;box-sizing:border-box}
+@media(min-width:981px) and (min-height:600px){
+ body>main{height:0;min-height:0;flex:1 1 0;overflow:hidden}
+ body>main>.view:not([hidden]){height:100%;min-height:0;overflow-y:auto;overflow-x:hidden;scrollbar-gutter:stable both-edges;padding-bottom:10px}
+ body[data-view="checker"]:has(#home:not([hidden]))>main>.view[data-view="checker"]{display:flex;flex-direction:column;height:100%;min-height:0;overflow-y:auto;scrollbar-gutter:stable both-edges}
+}
+@media(max-width:980px),(max-height:599px){
+ body{height:auto;min-height:100dvh;overflow-y:auto}
+ body>main{grid-template-rows:auto;flex:1 0 auto;height:auto;overflow:visible}
+ body>main>.view:not([hidden]){height:auto;overflow:visible}
+}
+@media(max-width:850px){body>main>.view>.workspace{grid-template-columns:minmax(0,1fr)}}
+
+/* Fit the actual megaphone form, rather than clipping a long form in a frame. */
+.view[data-view="megaphones"] .page-head{padding-bottom:10px}
+.view[data-view="megaphones"] .page-head h1{font-size:28px;margin-bottom:2px}
+.view[data-view="megaphones"] .page-head p{font-size:14px;line-height:1.4;max-width:none}
+.view[data-view="megaphones"] .workspace{margin-bottom:0;align-items:start}
+#mg-form{padding-top:8px;gap:7px}
+#mg-form .campaign-note{margin:0;font-size:12px}
+#mg-form .plans{margin:0;gap:8px;grid-template-columns:repeat(3,minmax(0,1fr))}
+#mg-form .plan{padding:8px 10px;gap:0}
+#mg-form .plan strong{font-size:13px}
+#mg-form .plan b{font-size:22px;line-height:1.15}
+#mg-form .plan small{font-size:10px}
+.mg-fields{display:grid;grid-template-columns:1fr 1fr;gap:9px 14px;min-width:0}
+.mg-field{display:flex;flex-direction:column;gap:4px;min-width:0}
+.mg-message-field{grid-column:2;grid-row:1/3}
+#mg-form .mg-message-field textarea{flex:1;min-height:96px;resize:vertical}
+#mg-form input,#mg-form textarea{padding:7px 10px;font-size:14px;min-width:0}
+#mg-form .mg-preview-wrap{display:flex;align-items:center;gap:10px}
+#mg-form .mg-preview-wrap>.hint{flex:none}
+#mg-preview{flex:1;min-width:0;margin:0;padding:6px 10px;font-size:12px}
+#mg-form .pay-buttons{margin:0;gap:8px}
+#mg-form .pay-buttons button{padding:8px 14px;font-size:13px}
+#mg-errors:empty{display:none}
+.mg-payment-details{font-size:12px}.mg-payment-details summary{cursor:pointer;color:#654822}
+.mg-how{padding:12px 14px!important}.mg-how summary{cursor:pointer;font:700 15px var(--display);color:#5a3b1d}
+.view[data-view="megaphones"] .workspace>aside{display:grid;gap:10px}
+.view[data-view="megaphones"] #mg-live,.view[data-view="megaphones"] #mg-mine{max-height:125px;overflow:auto;margin-bottom:0}
+.view[data-view="megaphones"] .page-ad-mock{min-height:48px;margin-top:10px;padding-block:7px}
+@media(max-width:760px){.mg-fields{grid-template-columns:1fr}.mg-message-field{grid-column:auto;grid-row:auto}#mg-form .plans{grid-template-columns:1fr}#mg-form .plan{display:grid;grid-template-columns:1fr auto}#mg-form .plan small{grid-column:1/-1}#mg-form .mg-preview-wrap{display:block}.view[data-view="megaphones"] .workspace>aside{grid-template-columns:1fr}}
+
+/* Fit each route's actual content, with consistent accessible section tabs. */
+.route-content{width:100%;min-width:0;min-height:0;box-sizing:border-box}
+.route-tabs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px;padding:4px;background:#f6ecd5;border:1px solid #c9af7a;border-radius:9px;margin-bottom:10px}
+.route-tabs button{background:none;box-shadow:none;border:1px solid transparent;color:#624922;padding:8px}
+.route-tabs button[aria-selected="true"]{background:#fffdf4;border-color:#bca16e;color:#402d16}
+.route-tab-frame,.route-tab-panel{min-width:0;min-height:0;width:100%;box-sizing:border-box}
+.route-tab-panel>.activity,.route-tab-panel>.privacy,.route-tab-panel>.panel{margin-top:0}
+main>.view .page-head{padding-bottom:10px}main>.view .page-head h1{font-size:28px;margin-bottom:3px}main>.view .page-head p{font-size:14px;line-height:1.5;max-width:none}
+.scan-location-details{margin:8px 0;border:1px solid #c9af7a;border-radius:6px;padding:8px 10px;background:#fff8e9}
+.scan-location-details>summary{cursor:pointer;font-weight:700;font-size:13px}
+.scan-body{padding-top:8px}.scan-body .consent{font-size:12px;line-height:1.5}.scan-body .watch-actions{padding-block:8px;margin:0}
+.scan-body .scan-capture{min-height:110px;max-height:180px;overflow:auto;margin-top:6px}.scan-body .capture-empty{min-height:110px;padding:12px}.scan-body .capture-empty p{margin:4px 0;font-size:12px}
+.scan-body .scan-stats{margin-top:8px}.scan-body .scan-stats div{padding:6px 8px}.scan-body .scan-stats strong{font-size:19px}
+.route-content .price-feed,.route-content .admin-list{max-height:30vh;overflow:auto}
+.route-content .page-ad-mock{min-height:42px;padding:6px 10px;margin-top:8px}
+.route-content .community-form{gap:8px;margin:10px 0;grid-template-columns:repeat(auto-fit,minmax(140px,1fr))}
+.route-content .community-form input{padding:7px}.route-content .panel h2{font-size:20px;margin:0 0 10px}
+#trade-output{gap:8px}#trade-output .kpi{padding:8px 10px}
+#h-chart .price-chart{height:clamp(110px,22vh,230px);object-fit:contain}.route-content #h-body{margin-top:0}.route-content .chart-box{max-height:25vh;overflow:auto}
+#watcher .steps summary{padding-block:9px}#watcher .step-body{padding:8px 0}#watcher .reading{margin-block:8px}#watcher .alert-options{font-size:12px}#watcher .status{margin-block:8px}
+@media(min-width:981px) and (min-height:600px){
+ body>main>.view:not([hidden]):not([data-view="checker"]){display:flex;flex-direction:column;overflow:hidden}
+ .view>.page-head{flex:0 0 auto}
+ .route-content{flex:1 1 0;overflow:auto;scrollbar-gutter:stable;display:flex;flex-direction:column;gap:0}
+ .route-tabs{flex:0 0 auto}.route-tab-frame{flex:1 1 0;overflow:hidden}.route-tab-panel:not([hidden]){height:100%;overflow:auto}
+ .route-tab-panel>.workspace,.route-content>.workspace{display:grid;grid-template-columns:minmax(0,1fr) minmax(240px,300px);gap:18px;align-items:start;width:100%;margin-bottom:0}
+ .route-content .home-grid.three{grid-template-columns:repeat(3,minmax(0,1fr));flex:1 1 0;min-height:0;align-items:stretch}
+ .route-content .home-grid.three>.activity{margin-top:0;display:flex;flex-direction:column;min-height:0}
+ .route-content .home-grid.three .price-feed{flex:1;min-height:0;max-height:none;overflow:auto}
+ .route-content>.page-ad-mock{flex:0 0 42px}
+ .route-content #public-stores{flex:1 1 0;min-height:0;max-height:none}
+}
+@media(max-width:850px){.route-tab-panel>.workspace,.route-content>.workspace{grid-template-columns:1fr}.route-tabs button{font-size:12px}.route-content .price-feed,.route-content .admin-list{max-height:260px}.scan-body .scan-stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* Two remaining primary tools. */
+.feature-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+#watcher .monitor>.section-head{flex:0 0 auto;margin-bottom:0}
+#watcher .watch-actions{flex:0 0 auto;margin:0;padding:8px 0;gap:8px}
+#watcher #start-checklist{flex:0 0 auto;margin:0;padding:4px 0;font-size:10px}
+#watcher #status{flex:0 0 auto;margin:4px 0;padding:6px 8px;font-size:12px;line-height:1.4}
+#watcher .notice{flex:0 0 auto;margin:4px 0 0;padding:6px 8px}
+#watcher .notice p{font-size:11px;line-height:1.4;margin:0}
+#watcher .steps{overflow-anchor:none}
+#watcher .metric{display:flex;align-items:center;justify-content:space-between;gap:12px}
+#watcher .metric strong{font-size:21px;line-height:1.2;text-align:right}
+#watcher .metric>span{font-size:10px;line-height:1.4;max-width:110px}
+@media(min-width:981px) and (min-height:600px){
+ .view[data-view="store"] .route-content{overflow:hidden}
+ .view[data-view="store"] .route-tab-panel:not([hidden]){overflow:hidden;padding:3px 2px 6px;overflow-anchor:none}
+ .view[data-view="store"] .route-tab-panel>#watcher{height:100%;min-height:0;align-items:stretch}
+ #watcher>.monitor{height:100%;min-height:0;display:flex;flex-direction:column;overflow:hidden;padding-bottom:8px}
+ #watcher>.monitor>.steps{flex:1 1 0;min-height:0;overflow-y:auto;overflow-x:hidden;padding-right:6px;scrollbar-gutter:stable}
+ #watcher>aside{min-height:0;overflow:auto;padding:0 2px 5px}
+ #watcher .steps>details>summary{padding-block:8px}
+ #watcher .step-body{padding-block:6px}
+ #watcher .step-body .hint{font-size:12px;line-height:1.4;margin-block:7px}
+ .route-tab-panel{scroll-padding-top:0;overflow-anchor:none}
+}
+@media(max-width:760px){.feature-grid{grid-template-columns:1fr}}
+
+/* Megaphone preview matches the announcement banner. */
+#mg-preview{min-height:48px;padding:7px 12px;font-size:13px;box-shadow:0 2px 0 #69421f40;box-sizing:border-box}
+#mg-preview .mega-label{display:inline-flex;align-items:center;gap:6px;background:none;border:0;box-shadow:none;padding:3px 2px;color:#fff9ed;text-shadow:none}
+#mg-preview .megaphone-motion{display:block;width:32px;height:32px;object-fit:contain;flex:none;animation:none}
+#mg-preview .mega-text{display:flex;align-items:center;gap:5px;min-height:30px;line-height:30px}
+#mg-preview .mega-text b{color:#ffeab1;flex:none}
+@media(max-width:760px){#mg-preview{flex-wrap:wrap;gap:6px}#mg-preview .mega-text{flex:1 1 100%;white-space:normal;line-height:20px;overflow-wrap:anywhere}}
+
+/* A single prompted setup step replaces nested scrolling. */
+.watcher-guide{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 4px}.watcher-guide button{padding:6px 10px;font-size:12px}.watcher-guide button[aria-current="step"]{background:var(--gold-lite);border-color:var(--wood-dark)}.watcher-prompt{margin:4px 0 8px;padding:8px 10px;background:#fff3cf;border-left:3px solid var(--wood);font-size:13px;line-height:1.4}
+#watcher .steps>details[hidden]{display:none!important}#watcher>.monitor>.steps{flex:0 0 auto;overflow:visible;padding-right:0;scrollbar-gutter:auto}#watcher>aside{overflow:visible}#watcher>.monitor{height:auto;overflow:visible}#watcher .steps>details>summary{display:none}#watcher #discord-step .step-body>.hint{font-size:12px;line-height:1.4}
+@media(min-width:981px) and (min-height:600px){.view[data-view="store"] .route-content,.view[data-view="store"] .route-tab-panel:not([hidden]){overflow:visible}.view[data-view="store"] .route-tab-panel>#watcher{height:auto}.view[data-view="store"] .route-tab-frame{overflow:visible}body>main>.view[data-view="store"]:not([hidden]){overflow-y:auto}}
+
+/* A comfortable, readable closing signature on every route. */
+body>footer,body[data-view="checker"]:has(#home:not([hidden]))>footer{
+ display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:12px 24px;
+ flex:0 0 auto;height:auto;min-height:72px;padding:14px 22px;margin-top:0;
+ border:1px solid #87613b;border-bottom:0;border-radius:14px 14px 0 0;
+ background:linear-gradient(180deg,#55371f 0%,#382316 100%);
+ box-shadow:inset 0 1px 0 #e8bd7650,0 -4px 16px #35200c14;color:#e8d9bb;
+}
+body>footer .footer-brand{display:inline-flex;align-items:center;gap:10px;justify-self:start;font-size:20px;letter-spacing:.15px;text-decoration:none;white-space:nowrap}
+body>footer .footer-emblem{display:grid;place-items:center;width:30px;height:30px;border:1px solid #d7ac6166;border-radius:9px;background:#e5b65d12;color:#f4ce7c;font:22px/1 Georgia,serif;box-shadow:inset 0 1px #ffedbb18}
+body>footer .footer-note{margin:0;text-align:center;line-height:1.5}
+body>footer .footer-note>span{display:block;color:#f4e4c5;font:600 12px/1.5 var(--text);letter-spacing:.15px}
+body>footer .footer-note small{display:block;color:#d1bd9a;font:400 11px/1.5 var(--text)}
+body>footer .footer-privacy{justify-self:end;display:inline-flex;align-items:center;gap:8px;min-height:36px;padding:0 12px;border:1px solid #d9b67555;border-radius:8px;background:#fff1c708;color:#f5deb1;font:600 12px/1.3 var(--text);text-decoration:none;transition:background .15s,border-color .15s}
+body>footer .footer-privacy svg{width:16px;height:16px;flex:none}
+body>footer .footer-privacy>span{color:#dbb571;font:16px/1 var(--text)}
+body>footer .footer-privacy:hover{background:#ffe3a51a;border-color:#e8c580}
+body>footer a:focus-visible{outline:2px solid #ffe0a0;outline-offset:4px}
+@media(max-width:980px){body>footer,body[data-view="checker"]:has(#home:not([hidden]))>footer{grid-template-columns:1fr auto;gap:10px 16px;padding:14px 18px}body>footer .footer-note{grid-row:2;grid-column:1/-1;text-align:left}}
+@media(max-width:480px){body>footer,body[data-view="checker"]:has(#home:not([hidden]))>footer{grid-template-columns:1fr;justify-items:center;gap:10px;padding:16px 12px}body>footer .footer-brand,body>footer .footer-privacy{justify-self:center}body>footer .footer-note{grid-row:auto;grid-column:auto;text-align:center}body>footer .footer-note small{max-width:32ch}}
+
+/* Megaphone purchase action */
+.site-actions>a.buy-megaphone{display:inline-flex;align-items:center;justify-content:center;gap:9px;min-height:42px;padding:5px 13px 5px 6px;box-sizing:border-box;border:1px solid #bc914d;border-radius:11px;background:linear-gradient(180deg,#fffdf5,#ffedc8);color:#62401e;text-decoration:none;font:700 13px/1.2 var(--text);box-shadow:inset 0 1px 0 #fff,0 2px 4px #71502718;transition:background .16s,box-shadow .16s,transform .16s}
+.buy-megaphone-icon{display:grid;place-items:center;flex:none;width:32px;height:30px;border-radius:7px;background:#fff7e6;border:1px solid #e7c98f}
+.buy-megaphone-icon img{display:block;object-fit:contain;image-rendering:pixelated}
+.buy-megaphone-arrow{margin-left:3px;color:#9c6a2d;font-size:17px;line-height:1}
+.site-actions>a.buy-megaphone:hover{background:linear-gradient(180deg,#fff8e6,#ffe3a7);border-color:#a67632;box-shadow:inset 0 1px 0 #fff,0 4px 9px #71502726;transform:translateY(-1px)}
+.site-actions>a.buy-megaphone:active{transform:translateY(0);box-shadow:inset 0 1px 3px #71502720}
+.site-actions>a.buy-megaphone:focus-visible{outline:3px solid #456d7b;outline-offset:3px}
+@media(prefers-reduced-motion:reduce){.site-actions>a.buy-megaphone{transition:none}}
+
+/* Clear setup cards, with the optional location outside the numbered sequence. */
+#watcher .watcher-guide{display:grid;grid-template-columns:repeat(3,minmax(0,1fr)) minmax(180px,.85fr);gap:12px;width:100%;margin:4px 0 16px}
+#watcher .watcher-guide button{display:flex;align-items:center;gap:12px;text-align:left;padding:14px 16px;min-height:78px;white-space:normal;background:#f5edd9;color:#66492d;border:1px solid #c7b393;border-radius:12px;box-shadow:0 3px 0 #d0bea0;text-shadow:none;font-size:15px}
+#watcher .watcher-guide button[aria-current="step"]{background:#fff0bc;border:2px solid #a56a27;box-shadow:0 3px 0 #a56a27}
+#watcher .watcher-guide button:disabled{opacity:.65;cursor:not-allowed}
+#watcher .guide-number{display:grid;place-items:center;flex:0 0 32px;height:32px;border-radius:50%;background:#e3d5ba;font-weight:800;font-size:17px}
+#watcher [aria-current="step"] .guide-number{background:#986024;color:#fff9e9}
+#watcher .is-complete .guide-number{background:#527345;color:white}
+#watcher .guide-copy{display:grid;gap:4px}
+#watcher .guide-copy strong{font-size:15px;line-height:1.25}
+#watcher .guide-copy small{font-family:Arial,sans-serif;font-size:12px;font-weight:400;line-height:1.35}
+#watcher .watcher-guide button:last-child{border-style:dashed}
+#watcher .watcher-prompt{margin:0 0 16px;padding:18px 22px;background:#fff6dc;border:1px solid #e1c28d;border-left:4px solid #a56a27;border-radius:10px;font-family:Arial,sans-serif;color:#493927}
+#watcher .watcher-prompt h3{margin:0 0 6px;font-size:19px;line-height:1.4;color:#65401e}
+#watcher .watcher-prompt p{margin:0;line-height:1.5;font-size:14px}
+#watcher .watcher-prompt ol{margin:12px 0;padding-left:22px;display:grid;gap:7px;font-size:14px;line-height:1.5}
+#watcher .watcher-prompt .watcher-guide-status{padding-top:10px;border-top:1px solid #ead6ad;font-size:12px;font-weight:700;color:#75552f}
+@media(max-width:1000px){#watcher .watcher-guide{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:520px){#watcher .watcher-guide{gap:8px}#watcher .watcher-guide button{padding:10px;gap:8px;min-height:80px}#watcher .guide-copy strong{font-size:13px}#watcher .guide-copy small{font-size:11px}#watcher .guide-number{flex-basis:26px;height:26px;font-size:14px}#watcher .watcher-prompt{padding:14px}#watcher .watcher-prompt h3{font-size:17px}}
+/* Compact spacing for the Store Watcher setup. */
+@media(min-width:981px) and (min-height:600px){
+ #watcher .watcher-guide{gap:8px;margin:4px 0 10px;flex:none}
+ #watcher .watcher-guide button{min-height:52px;padding:8px 12px;gap:8px;border-radius:8px}
+ #watcher .guide-number{flex-basis:26px;height:26px;font-size:14px}
+ #watcher .guide-copy{gap:2px}
+ #watcher .guide-copy strong{font-size:13px}
+ #watcher .guide-copy small{font-size:11px}
+ #watcher .watcher-prompt{padding:10px 14px;margin:0 0 8px;flex:none}
+ #watcher .watcher-prompt h3{font-size:16px;line-height:1.3;margin:0 0 4px}
+ #watcher .watcher-prompt p{font-size:12px;line-height:1.35}
+ #watcher .watcher-prompt ol{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px 24px;margin:8px 0;padding-left:18px;font-size:12px;line-height:1.4}
+ #watcher .watcher-prompt .watcher-guide-status{padding-top:6px;font-size:11px}
+ #watcher .step-body{padding:4px 0}
+ #watcher .step-body .hint{font-size:11px;line-height:1.3;margin-block:4px}
+ #watcher .capture-settings{margin-top:4px}
+ #watcher .capture-settings>summary{padding-block:4px;font-size:11px}
+ #watcher .watch-actions{padding:5px 0;gap:8px}
+ #watcher #status{padding:4px 8px;margin:3px 0;font-size:11px}
+ #watcher .notice{padding:4px 8px}
+ #watcher .notice p{font-size:10px;line-height:1.3}
+ #watcher>aside{overflow:visible}
+ #watcher>aside .side-card{padding:12px 16px;margin-bottom:0}
+ #watcher>aside .metric{padding:8px 10px;margin-block:6px}
+ #watcher>aside .side-card p{font-size:12px;line-height:1.4;margin-block:7px}
+ .view[data-view="store"] .page-head{padding-bottom:6px}
+ .view[data-view="store"] .route-tabs{margin-bottom:6px;padding:3px}
+ .view[data-view="store"] .route-tabs button{padding:5px 8px}
+ .view[data-view="store"] .page-ad-mock{min-height:30px;flex-basis:30px;padding:3px 8px;margin-top:5px}
+}
+
+/* Keep dynamic labels readable inside the existing panels. */
+.price-unit{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+.item-link>span:not(.item-icon),#scan-d-shop,#scan-place-src,#scan-blocked{min-width:0;overflow-wrap:anywhere}
+.meso-amt>.meso{flex-shrink:0}
+
+@media(min-width:981px) and (min-height:600px){
+ .home-explore>#home-panel-market:not([hidden]){grid-template-rows:minmax(138px,1fr)}
+}
+
+/* Long detail views use the document scrollbar so the footer follows the content. */
+@media(min-width:981px) and (min-height:600px){
+ body:is([data-view="scanner"],[data-view="store"],[data-view="checker"]:has(#item-page:not([hidden]))){
+  height:auto;
+  min-height:100dvh;
+  overflow-y:auto;
+ }
+ body:is([data-view="scanner"],[data-view="store"],[data-view="checker"]:has(#item-page:not([hidden])))>main{
+  height:auto;
+  flex:1 0 auto;
+ }
+ body:is([data-view="scanner"],[data-view="store"],[data-view="checker"]:has(#item-page:not([hidden])))>main>.view:not([hidden]){
+  height:auto;
+  flex:1 0 auto;
+  overflow:visible;
+  scrollbar-gutter:auto;
+ }
+ .view:is([data-view="scanner"],[data-view="store"])>.route-content{
+  flex:1 0 auto;
+  overflow:visible;
+  scrollbar-gutter:auto;
+ }
+ .view[data-view="store"] .route-tab-frame{flex:1 0 auto;overflow:visible}
+ .view[data-view="store"] .route-tab-panel:not([hidden]){height:auto;overflow:visible}
+ .view[data-view="store"] .route-tab-panel>#watcher{height:auto;align-items:start}
+ #watcher>.monitor{height:auto;overflow:visible}
+ #watcher>.monitor>.steps{flex:0 0 auto;overflow:visible;padding:0;scrollbar-gutter:auto}
+}
+#ip-chart .price-chart{max-height:clamp(140px,28vh,280px)}
+.scan-body .scan-capture{max-height:none;overflow:hidden}
+#scan-canvas{max-height:55vh;object-fit:contain}
+
+.market-index .panel-head{flex-wrap:wrap;gap:8px}
+.market-index label{display:flex;align-items:center;flex-wrap:wrap;gap:6px}
+.market-index input{min-width:0;max-width:100%}
+.market-index .table-wrap{max-width:100%;overflow-x:auto}
+@media(min-width:981px) and (min-height:600px){
+ .view[data-view="trends"]>.route-content>.home-grid.three{flex:0 0 auto}
+ .view[data-view="trends"]>.route-content>.home-grid.three .price-feed{max-height:24vh}
+ .market-index{flex:none}
+}
+
+/* The catalog can extend below the viewport without nested scrolling. */
+body[data-view="checker"]:has(#home:not([hidden]) #home-panel-catalog:not([hidden])){
+ height:auto;min-height:100dvh;overflow-y:auto;
+}
+body[data-view="checker"]:has(#home:not([hidden]) #home-panel-catalog:not([hidden]))>main{
+ height:auto;flex:1 0 auto;
+}
+body[data-view="checker"]:has(#home:not([hidden]) #home-panel-catalog:not([hidden]))>main>.view:not([hidden]){
+ height:auto;flex:1 0 auto;overflow:visible;scrollbar-gutter:auto;
+}
+body[data-view="checker"] #home:has(#home-panel-catalog:not([hidden]))>.home-explore{
+ flex:none;height:auto;grid-template-rows:auto auto;
+}
+.home-explore>#home-panel-catalog:not([hidden]){
+ height:auto;max-height:none;grid-template-rows:auto;grid-auto-rows:auto;align-items:start;overflow:visible;
+}
+.home-explore>#home-panel-catalog>.activity,
+.home-explore>#home-panel-catalog>.activity>.admin-list{
+ height:auto;max-height:none;flex:none;overflow:visible;
+}
+#catalog-status:empty{display:none}
+#catalog-more:not([hidden]){align-self:flex-start;margin-top:8px}
+
+body[data-view="checker"]:has(#home-panel-catalog:not([hidden])) #home:not([hidden]){
+ flex:0 0 auto;
+}

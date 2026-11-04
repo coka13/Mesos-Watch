@@ -1,34 +1,52 @@
 // Public navigation, world picker, FM Megaphones and browser-data controls.
-import {searchItems,NOT_SET_UP,configured,worlds,megaphonePlans,liveMegaphones,myMegaphones} from './api.mjs?v=ms-2';
+import {searchItems,NOT_SET_UP,configured,worlds,megaphonePlans,liveMegaphones,myMegaphones} from './api.mjs?v=ms-4';
 import {checkMegaphone,MAX_MESSAGE} from './megaphone-rules.mjs?v=pc-1';
-import {show,worldChanged,iconEl} from './checker.mjs?v=ms-3';
+import {show,worldChanged,iconEl} from './checker.mjs?v=ms-8';
 const $=id=>document.getElementById(id);
 const el=(tag,props={},...kids)=>{const e=Object.assign(document.createElement(tag),props);e.append(...kids.filter(k=>k!=null&&k!==false));return e;};
 const money=c=>'$'+(c/100).toFixed(2);
-const VIEWS=['checker','trends','scanner','history','megaphones','store','settings','stores','opportunities'];
+const VIEWS=['checker','trends','scanner','history','megaphones','store','settings','stores'];
 const LEGACY={watcher:'store','sale-activity':'store',support:'store',discord:'store',guide:'settings',prices:'checker',item:'checker'};
 
 // ---- Router ----
+const reducedMotion=matchMedia('(prefers-reduced-motion: reduce)');
+let anchorTimer;
 function route(){
+ clearTimeout(anchorTimer);
  const raw=location.hash.replace(/^#/,''),[path,query='']=raw.split('?'),[head,arg]=path.split('/');
  const view=VIEWS.includes(head)?head:LEGACY[head]||'checker',param=head==='item'?arg:view==='history'?arg:null;
  for(const v of document.querySelectorAll('.view'))v.hidden=v.dataset.view!==view;
  // Sub-links (e.g. Discord Integration inside My Store) are current only when their anchor is the one routed to.
  const links=[...document.querySelectorAll('#nav a')],subMatch=links.some(a=>a.dataset.view===view&&a.dataset.sub&&a.dataset.sub===arg);
- for(const a of links)a.toggleAttribute('aria-current',a.dataset.view===view&&(subMatch?a.dataset.sub===arg:!a.dataset.sub));
+ for(const a of links){
+  if(a.dataset.view===view&&(subMatch?a.dataset.sub===arg:!a.dataset.sub))a.setAttribute('aria-current','page');
+  else a.removeAttribute('aria-current');
+ }
  document.body.dataset.view=view;$('community-status').textContent='';window.dispatchEvent(new CustomEvent('mesoswatch:view',{detail:{view,param:arg}}));
  if(view!=='checker')document.title=({history:'Price History',settings:'Privacy & browser data'}[view]||document.querySelector(`#nav a[data-view="${view}"]`)?.textContent.trim()||'Mesos-Watch')+' · Mesos-Watch';
  const anchor=arg&&!param&&document.getElementById(arg);
  show(view,param).catch(()=>{});
  if(view==='megaphones')loadMegaphoneView(new URLSearchParams(query));
 
- if(anchor){anchor.closest('details')?.setAttribute('open','');if(anchor.tagName==='DETAILS')anchor.open=true;setTimeout(()=>anchor.scrollIntoView({block:'start',behavior:'smooth'}),view==='settings'?400:0);}
+ if(anchor){anchor.closest('details')?.setAttribute('open','');if(anchor.tagName==='DETAILS')anchor.open=true;anchorTimer=setTimeout(()=>anchor.scrollIntoView({block:'start',behavior:reducedMotion.matches?'auto':'smooth'}),view==='settings'?400:0);}
  else if(!param)window.scrollTo({top:0});
 }
 window.addEventListener('hashchange',route);
+document.querySelector('.skip-link').addEventListener('click',event=>{
+ event.preventDefault();
+ $('main-content').focus();
+ $('main-content').scrollIntoView({block:'start'});
+});
 // Narrow screens: the section menu folds away so the search stays near the top.
 $('nav-toggle').onclick=()=>{const open=$('nav').classList.toggle('open');$('nav-toggle').setAttribute('aria-expanded',String(open));};
-window.addEventListener('hashchange',()=>{$('nav').classList.remove('open');$('nav-toggle').setAttribute('aria-expanded','false');});
+function closeMenu(){
+ const wasOpen=$('nav').classList.contains('open');
+ $('nav').classList.remove('open');$('nav-toggle').setAttribute('aria-expanded','false');
+ return wasOpen;
+}
+window.addEventListener('hashchange',closeMenu);
+$('nav').addEventListener('click',e=>{if(e.target.closest('a')?.hash===location.hash&&closeMenu())$('nav-toggle').focus();});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&closeMenu())$('nav-toggle').focus();});
 
 // ---- World ----
 const ws=worlds(),sel=$('world');
@@ -38,17 +56,37 @@ sel.hidden=!ws.length;
 sel.onchange=()=>{try{localStorage.setItem('mw-world',sel.value);}catch{}worldChanged();route();loadStrip();};
 
 // ---- Megaphone strip under the search bar: every live message takes an equal turn, 8 seconds each ----
-let strip=[],stripIdx=0,stripTimer=null;
+let strip=[],stripIdx=0,stripTimer=null,stripRequest=0;
+const localMegaphoneTest=/^(localhost|127\.0\.0\.1)$/.test(location.hostname);
+const testMegaphones=[
+ {sender:'TEST',message:'Welcome to Mesos-Watch! Scan shops. Track sales. Trade smart.'},
+ {sender:'TEST',message:'Looking for a price? Scan the Free Market and compare asking prices.'},
+ {sender:'TEST',message:'Your shop, your alerts. Send sold-item notifications straight to Discord.'}
+];
 async function loadStrip(){
- if(!configured()){$('mega-strip').hidden=true;return;}
- try{strip=await liveMegaphones(sel.value);}catch{strip=[];}
- $('mega-strip').hidden=!strip.length;clearInterval(stripTimer);stripIdx=0;showStrip();
- if(strip.length>1)stripTimer=setInterval(showStrip,8000);
+ const request=++stripRequest;
+ let messages=[];
+ if(configured())try{messages=await liveMegaphones(sel.value);}catch{}
+ if(request!==stripRequest)return;
+ strip=messages;
+ clearInterval(stripTimer);showStrip();
+ if(strip.length||localMegaphoneTest)stripTimer=setInterval(showStrip,8000);
 }
 function showStrip(){
- strip=strip.filter(m=>new Date(m.ends_at)>new Date());$('mega-strip').hidden=!strip.length;if(!strip.length)return;const m=strip[stripIdx++%strip.length];
- $('mega-text').replaceChildren(...[megaItem(m),m.sender&&el('b',{textContent:m.sender+' : '}),document.createTextNode(m.message)].filter(Boolean));
- $('mega-pos').textContent=strip.length>1?`${(stripIdx-1)%strip.length+1}/${strip.length}`:'';
+ strip=strip.filter(m=>new Date(m.ends_at)>new Date());
+ const messages=localMegaphoneTest?testMegaphones:strip;
+ $('mega-strip').hidden=!messages.length;if(!messages.length){clearInterval(stripTimer);stripTimer=null;return;}
+ const index=stripIdx++%messages.length,m=messages[index];
+ const label=$('mega-strip').querySelector('.mega-label');
+ const labelText=localMegaphoneTest?' TEST MEGAPHONE':' Megaphone';
+ if(label.lastChild.textContent!==labelText)label.replaceChildren(el('img',{className:'megaphone-motion',src:'sprites/tools/megaphone.png',alt:'',width:32,height:32}),document.createTextNode(labelText));
+ const viewport=$('mega-text');
+ const line=el('span',{className:'mega-line'},...[megaItem(m),m.sender&&el('b',{textContent:m.sender+' : '}),document.createTextNode(m.message)].filter(Boolean));
+ viewport.replaceChildren(line);
+ if(!reducedMotion.matches){
+  line.animate([{transform:'translateX('+viewport.clientWidth+'px)'},{transform:'translateX(-'+line.scrollWidth+'px)'}],{duration:8000,easing:'linear',fill:'forwards'});
+ }
+ $('mega-pos').textContent=messages.length>1?(index+1)+'/'+messages.length:'';
 }
 setInterval(loadStrip,60000);
 
@@ -81,7 +119,7 @@ $('mg-item-clear').onclick=()=>pickItem(null);
 function preview(){
  const r=checkMegaphone({message:$('mg-message').value,sender:$('mg-sender').value});
  $('mg-count').textContent=`${$('mg-message').value.length}/${MAX_MESSAGE}`;
- $('mg-preview').replaceChildren(el('span',{className:'mega-label',textContent:'📢 Megaphone'}),el('span',{className:'mega-text'},...[mgItem&&megaItem({item_id:mgItem.id,item_name:mgItem.name,item_game_id:mgItem.game_id,item_icon_path:mgItem.icon_path,item_category:mgItem.category}),r.sender&&el('b',{textContent:r.sender+' : '}),document.createTextNode(r.message||'Your message appears here')].filter(Boolean)));
+ $('mg-preview').replaceChildren(el('span',{className:'mega-label'},el('img',{className:'megaphone-motion',src:'sprites/tools/megaphone.png',alt:'',width:32,height:32}),document.createTextNode(' Megaphone')),el('span',{className:'mega-text'},...[mgItem&&megaItem({item_id:mgItem.id,item_name:mgItem.name,item_game_id:mgItem.game_id,item_icon_path:mgItem.icon_path,item_category:mgItem.category}),r.sender&&el('b',{textContent:r.sender+' : '}),document.createTextNode(r.message||'Your message appears here')].filter(Boolean)));
  $('mg-errors').replaceChildren(...r.errors.filter(e=>$('mg-message').value||!/at least/.test(e)).map(e=>el('li',{textContent:e})));
  $('mg-buy').disabled=!configured()||!!r.errors.length||!chosen;
  const p=plans.find(x=>x.id===chosen);$('mg-buy').textContent=p?`Pay ${money(p.price_cents)} · secure checkout`:'Choose a duration';
@@ -104,7 +142,11 @@ $('mg-form').onsubmit=async e=>{e.preventDefault();const r=checkMegaphone({messa
 $('set-clear-sales').onclick=()=>{const b=$('set-clear-sales');if(b.dataset.armed){window.dispatchEvent(new Event('mesoswatch:clear-sales'));b.textContent='Sales history cleared';delete b.dataset.armed;setTimeout(()=>b.textContent='Clear my sales history',2500);}else{b.dataset.armed='1';b.textContent='Click again to clear';setTimeout(()=>{delete b.dataset.armed;b.textContent='Clear my sales history';},4000);}};
 $('set-reset-consent').onclick=()=>{try{localStorage.removeItem('mw-scan-consent');}catch{}const c=$('scan-consent');if(c.checked){c.checked=false;c.dispatchEvent(new Event('change'));}$('set-reset-consent').textContent='Scanner agreement reset';};
 
-document.addEventListener('keydown',e=>{if(e.key==='/'&&!/input|textarea|select/i.test(document.activeElement.tagName)){e.preventDefault();if(document.body.dataset.view!=='checker')location.hash='#checker';$('q').focus();}});
+document.addEventListener('keydown',e=>{if(e.key==='/'&&!e.ctrlKey&&!e.metaKey&&!e.altKey&&!e.isComposing&&!document.activeElement.closest('input,textarea,select,[contenteditable]')){
+ e.preventDefault();
+ if(document.body.dataset.view!=='checker'){window.addEventListener('hashchange',()=>$('q').focus(),{once:true});location.hash='#checker';}
+ else $('q').focus();
+ }});
 $('config-missing').hidden=configured();
 if(configured())megaphonePlans().catch(e=>{if(e.message===NOT_SET_UP){$('config-missing').textContent=NOT_SET_UP;$('config-missing').hidden=false;}});
 route();loadStrip();

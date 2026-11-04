@@ -1,7 +1,7 @@
 // PayPal and crypto (NOWPayments) payments for megaphones, sponsor slots and donations. The browser only starts a payment
 // and returns from it; prices come from the database and every payment is confirmed on the server
 // (supabase/functions/pay-create, paypal-capture, nowpayments-ipn) before anything goes live.
-import {configured,client,session,adminState} from './api.mjs?v=ms-2';
+import {configured,client,session,adminState} from './api.mjs?v=ms-4';
 
 const config=window.MESOSWATCH_CONFIG||{},pay=config.payments||{};
 const PROVIDERS=(Array.isArray(pay.providers)?pay.providers:['paypal','crypto']).filter(p=>p==='paypal'||p==='crypto');
