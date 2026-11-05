@@ -10,7 +10,7 @@ import {chooseSoldReading,chatVisitors,parsePriceList,majorityNumber,STORE_FEE_R
 import {parseTotal,chooseItemReading} from './detection.mjs?v=reader-4';
 import {tsvWords,locateRegions,frameScale,coinScorer} from './locate.mjs?v=autoselect-7';
 import {reportObservations,configured as boardConfigured,matchNames,iconUrl} from './api.mjs?v=ms-4';
-import * as fm from './fm-location.mjs?v=fm-4';
+import * as fm from './fm-location.mjs?v=store-minimap-1';
 import {makeLocation,locationProblems,whereToFind} from './location.mjs?v=loc-1';
 import {needAccount,SignInNeeded,ownStores,saveStore,saveListing,storeListings} from './community-api.mjs';
 const $=id=>document.getElementById(id);
@@ -390,6 +390,7 @@ const fmTask=fn=>async()=>{if(fmBusy)return;fmBusy=true;fmControls();
  finally{busy=false;fmBusy=false;controls();fmControls();}};
 const keep=(id,value)=>{$(id).value=value;$(id).dispatchEvent(new Event('input'));};
 $('fm-read-room').onclick=fmTask(async()=>{
+ $('fm-minimap-view').hidden=true;
  const W=video.videoWidth,H=video.videoHeight,corner=fm.roomCorner(W,H);fmStatus('Reading the minimap…');
  // The minimap's blue title panel from pixels; OCR over the corner only when that panel is not found.
  const found=fm.roomLine(framePixels(),corner);let crop=found?.crop,reads=found?fm.roomLineReads(found.h):fm.ROOM_READS;
@@ -401,6 +402,15 @@ $('fm-read-room').onclick=fmTask(async()=>{
  if(!res)throw Error('The room number was unclear ('+texts.map(t=>t.trim()).join(' / ')+'). Keep the minimap still and try again, or type the room.');
  if(res.roomNumber){keep('fm-map','');keep('fm-room',res.roomNumber);fmStatus('Free Market room '+res.roomNumber+' read. Now open the Change Channel menu and press Read channel.');}
  else{keep('fm-room','');keep('fm-map',res.mapName);fmStatus('Map “'+res.mapName+'” read (not an FM room). Check the name, then open the Change Channel menu and press Read channel.');}
+ const place=fm.storeMinimap(framePixels()),canvas=$('fm-minimap');
+ if(place){
+  const {map,marker}=place;canvas.width=map.w;canvas.height=map.h;
+  const g=canvas.getContext('2d');g.drawImage(video,map.x,map.y,map.w,map.h,0,0,map.w,map.h);
+  if(marker){g.strokeStyle='#ffe34c';g.lineWidth=2;g.beginPath();g.arc(marker.x,marker.y,8,0,Math.PI*2);g.stroke();}
+  $('fm-store-position').textContent=(res.roomNumber?'Free Market '+res.roomNumber:res.mapName)+' · '+(marker?'Store position: yellow marker.':'Yellow store marker unclear. Keep the expanded minimap visible and read again.');
+  $('fm-minimap-view').hidden=false;
+ }
+
 });
 $('fm-read-channel').onclick=fmTask(async()=>{
  fmStatus('Looking for the Change Channel menu…');
