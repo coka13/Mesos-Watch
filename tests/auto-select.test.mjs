@@ -24,3 +24,8 @@ assert.equal(result.cancelled,true);assert.deepEqual(result.regions,{},'changed 
 const rgba=new Uint8ClampedArray([100,120,140,255,200,200,200,255]),copy=new Uint8ClampedArray(rgba),enhanced=enhanceFramePixels(rgba,true);
 assert.deepEqual(rgba,copy);assert.equal(enhanced.length,rgba.length);assert.deepEqual([...enhanced],[0,0,0,255,255,255,255,255]);
 console.log('Auto Select: inline/merged labels, inventory labels, ambiguous totals, multi-pass fallback, stale frames and unchanged coordinate origins passed.');
+
+const emptyPanel=locateRegions([word('Total Sales',400,200),word('0',400,222),word('0',400,244)],1000,700);
+assert.ok(emptyPanel.total,'empty panel total can still be located');
+assert.equal(emptyPanel.items,undefined,'empty list position requires an anchor');
+assert.equal(emptyPanel.sale,undefined,'never guess a sale snapshot above an empty panel');
