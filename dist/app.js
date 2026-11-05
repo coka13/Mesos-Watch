@@ -288,7 +288,7 @@ async function readBalance(w){
  let source=crop('balance');const ink=numericInkBounds(source.getContext('2d',{willReadFrequently:true}).getImageData(0,0,source.width,source.height),1);if(ink){const tight=document.createElement('canvas');tight.width=ink.w;tight.height=ink.h;tight.getContext('2d').drawImage(source,ink.x,ink.y,ink.w,ink.h,0,0,ink.w,ink.h);source=tight;}
  const reads=await readAll(w,source,NUMBER_PASSES),first=majorityNumber(reads,parseTotal),reliable=first!==null;
  lastReads.balance=(reliable?fmt(first):'unclear')+' · '+Math.round(middle(reads))+'%';
- $('balance-reading').replaceChildren(reliable?mesoAmt(fmt(first),15):document.createTextNode('Unclear'));
+ $('balance-reading').replaceChildren(reliable?mesoAmt(fmt(first),15):Object.assign(document.createElement('span'),{className:'text-val',textContent:'Unclear'}));
  $('balance-note').textContent=reliable?'Personal mesos · checked '+new Date().toLocaleTimeString():'Balance unreadable. Keep inventory visible or reselect the digits.';
  return reliable?first:null;
 }
