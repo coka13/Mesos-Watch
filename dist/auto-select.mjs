@@ -1,4 +1,4 @@
-import {locateRegions,tsvWords} from './locate.mjs?v=autoselect-7';
+import {locateRegions,tsvWords} from './locate.mjs?v=autoselect-8';
 import {validRegion} from './capture-geometry.mjs';
 export const ESSENTIAL_REGIONS=['total','items','balance'];
 export const requiredStoreRegions=regions=>regions.mode==='sold-items'?['items','balance']:ESSENTIAL_REGIONS;
