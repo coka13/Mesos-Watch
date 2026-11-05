@@ -10,7 +10,7 @@ import {chooseSoldReading,chatVisitors,parsePriceList,majorityNumber,STORE_FEE_R
 import {parseTotal} from './detection.mjs?v=reader-4';
 import {tsvWords,locateRegions,frameScale,coinScorer} from './locate.mjs?v=autoselect-9';
 import {reportObservations,configured as boardConfigured,matchNames,iconUrl} from './api.mjs?v=ms-4';
-import * as fm from './fm-location.mjs?v=fm-5';
+import * as fm from './fm-location.mjs?v=store-icons-1';
 import {makeLocation,locationProblems,whereToFind} from './location.mjs?v=loc-1';
 import {needAccount,SignInNeeded,ownStores,saveStore,saveListing,storeListings} from './community-api.mjs';
 const $=id=>document.getElementById(id);
@@ -195,7 +195,11 @@ async function reading(){
   const data=await readRect(regions.storeItems,options,'6');
   storeReadings.push(fm.parseStoreRows(fm.toSource(tsvWords(data.tsv),regions.storeItems,options.scale)));
  }
- const storeRows=fm.mergeStoreRows(storeReadings,framePixels());
+ const storeFrame=framePixels();
+ const storeRows=fm.mergeStoreRows(storeReadings,storeFrame);
+ const storeCanvas=document.createElement('canvas');
+ storeCanvas.width=storeFrame.width;storeCanvas.height=storeFrame.height;
+ storeCanvas.getContext('2d').putImageData(storeFrame,0,0);
  const storeList=$('store-items-reading');storeList.replaceChildren();
  if(!storeRows.length)storeList.textContent='No store items read. Check the selected store item area.';
  for(const row of storeRows){
@@ -204,7 +208,13 @@ async function reading(){
   name.textContent=row.item;
   detail.textContent=row.qty+' for '+fmt(row.bundle)+' mesos'+(row.sold?' · Sold':'');
   text.append(name,detail);card.append(text);storeList.append(card);
-  attachItemIcon(card,row.item);
+  const area=fm.storeIconArea(row,storeRows,storeFrame.width,storeFrame.height);
+  const icon=document.createElement('canvas');icon.width=area.w;icon.height=area.h;
+  icon.getContext('2d').drawImage(storeCanvas,area.x,area.y,area.w,area.h,0,0,area.w,area.h);
+  const image=Object.assign(document.createElement('img'),{
+   src:icon.toDataURL('image/png'),alt:row.item,width:40,height:40,className:'sold-item-icon'
+  });
+  card.prepend(image);
  }
  const balance=await readBalance(w),visitors=await readChat(w);
   const sold=chooseSoldReading(...itemReads);lastReads.items=sold.records.length+' records · '+Math.round(sold.confidence)+'%';

@@ -128,6 +128,15 @@ export function parseStoreRows(words){
  }
  return rows;
 }
+// The icon cell sits immediately left of the name/price block. Neighboring row
+// spacing preserves its size across capture scaling and keeps crops in their own row.
+export function storeIconArea(row,rows,W,H){
+ const gaps=rows.filter(other=>other!==row).map(other=>Math.abs(other.box.y-row.box.y)).filter(gap=>gap>row.box.h);
+ const pitch=gaps.length?Math.min(...gaps):row.box.h*1.8;
+ const side=Math.min(pitch,row.box.h*2);
+ const padding=side*.04;
+ return clampRect({x:row.box.x-side-padding,y:row.box.y-(side-row.box.h)/2,w:side,h:side},W,H);
+}
 // Sold rows are drawn in light grey: no dark ink anywhere on the price line, but some grey ink (about 190 on a 244 background),
 // so a box that slipped onto empty background is not taken for a sold row.
 export function isSold(px,box){
