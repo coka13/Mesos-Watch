@@ -161,3 +161,14 @@ for(const [name,pass]of Object.entries(fx.passes)){
 }
 assert.equal(readShop([{text:'Buy',x:10,y:10,w:20,h:10,confidence:90}]).ownStore,false);
 console.log('Scanner on the reference frame: correct asking prices, sold-out rows skipped, own store recognised and not shared.');
+
+const emptyFixture=JSON.parse(fs.readFileSync(new URL('./fixtures/store-empty-sold.ocr.json',import.meta.url),'utf8'));
+const emptyImage=await Jimp.read(fileURLToPath(new URL('./fixtures/store-empty-sold.png',import.meta.url)));
+const emptyPixels=await framePixels(emptyImage,emptyFixture.scale);
+const emptyRegions=locateRegions(tsvWords(emptyFixture.tsv),emptyPixels.width,emptyPixels.height,emptyFixture.scale,coinScorer(emptyPixels,emptyFixture.scale),emptyPixels);
+assert.equal(emptyRegions.mode,'sold-items');
+assert.ok(inside(emptyRegions.balance,{x:640,y:370,w:140,h:40}), 'personal mesos stays in the field under Close Store');
+assert.ok(covers(emptyRegions.balance,{x:717,y:382,w:48,h:14}), 'personal mesos includes 78,721');
+assert.ok(inside(emptyRegions.items,{x:1150,y:200,w:310,h:370}), 'empty Sold Items stays inside its window');
+assert.ok(covers(emptyRegions.items,{x:1220,y:330,w:190,h:200}), 'empty Sold Items includes the rows below totals');
+assert.ok(covers(emptyRegions.storeItems,{x:545,y:420,w:190,h:185}), 'store list includes all four listed items');

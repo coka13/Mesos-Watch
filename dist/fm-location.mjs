@@ -3,7 +3,7 @@
 //  - World and channel: the Change Channel menu; the current channel is the one blue cell in a grid of grey cells.
 //  - Store list: the rows left of the shop chat, "Orange Potion / 1 for 125 mesos"; sold rows are greyed out.
 // Pure functions over OCR words (tsvWords) and RGBA pixels {data,width,height}, shared by app.js and the tests.
-import {rowsOf} from './locate.mjs?v=autoselect-8';
+import {rowsOf} from './locate.mjs?v=autoselect-9';
 import {cleanMapName,looksLikeFm} from './location.mjs?v=loc-1';
 
 const lum=(px,x,y)=>{const p=(y*px.width+x)*4,d=px.data;return .299*d[p]+.587*d[p+1]+.114*d[p+2];};
