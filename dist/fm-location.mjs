@@ -3,7 +3,7 @@
 //  - World and channel: the Change Channel menu; the current channel is the one blue cell in a grid of grey cells.
 //  - Store list: the rows left of the shop chat, "Orange Potion / 1 for 125 mesos"; sold rows are greyed out.
 // Pure functions over OCR words (tsvWords) and RGBA pixels {data,width,height}, shared by app.js and the tests.
-import {rowsOf} from './locate.mjs?v=autoselect-7';
+import {rowsOf} from './locate.mjs?v=autoselect-8';
 import {cleanMapName,looksLikeFm} from './location.mjs?v=loc-1';
 
 const lum=(px,x,y)=>{const p=(y*px.width+x)*4,d=px.data;return .299*d[p]+.587*d[p+1]+.114*d[p+2];};
@@ -25,7 +25,9 @@ const view=(px,r)=>{const data=new Uint8ClampedArray(r.w*r.h*4);for(let y=0;y<r.
 // pixels) and the text height, or null.
 export function roomLine(px,corner){
  const c=view(px,corner);
- const blue=components(c,panelBlue).filter(k=>k.w>=50&&k.h>=18&&k.n>=k.w*k.h*.2).sort((a,b)=>b.n-a.n)[0];
+ // The expanded minimap is anchored at the top-left. A larger blue sky patch can
+ // share the title panel's colors, so area is not evidence of the minimap.
+ const blue=components(c,panelBlue).filter(k=>k.w>=50&&k.h>=18&&k.n>=k.w*k.h*.2).sort((a,b)=>a.y-b.y||a.x-b.x)[0];
  if(!blue)return null;
  const x0=blue.x+Math.round(blue.w*.3),x1=blue.x+blue.w,rows=[];
  for(let y=blue.y;y<blue.y+blue.h;y++){let w=0,b=0;for(let x=x0;x<x1;x++){if(titleWhite(c,x,y))w++;else if(panelBlue(c,x,y))b++;}rows.push({y,w,b:b>=(x1-x0)*.3});}
