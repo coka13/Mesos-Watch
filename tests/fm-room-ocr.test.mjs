@@ -5,11 +5,17 @@
 import assert from 'node:assert/strict';
 import {fileURLToPath} from 'node:url';
 import {Jimp} from 'jimp';import {createWorker} from 'tesseract.js';
+import fs from 'node:fs';
+import {locateRegions,tsvWords,coinScorer} from '../dist/locate.mjs';
+import {numericInkBounds} from '../dist/numeric-region.mjs';
+import {majorityNumber} from '../dist/sold-items.mjs';
+import {parseTotal} from '../dist/detection.mjs';
+import {NUMBER_PASSES} from '../dist/ocr-prep.mjs';
 import {ocrImage} from '../dist/ocr-prep.mjs';import * as fm from '../dist/fm-location.mjs';
 const w=await createWorker('eng');
 const pix=i=>({data:i.bitmap.data,width:i.bitmap.width,height:i.bitmap.height});
-async function read(img,rect,o,wl){const b=img.clone().crop({x:rect.x,y:rect.y,w:rect.w,h:rect.h}),p=ocrImage(pix(b),o),out=new Jimp({width:p.width,height:p.height});out.bitmap.data=Buffer.from(p.data);
- await w.setParameters({tessedit_pageseg_mode:'7',tessedit_char_whitelist:wl});return (await w.recognize(await out.getBuffer('image/png'))).data.text.trim();}
+async function read(img,rect,o,wl,details=false){const b=img.clone().crop({x:rect.x,y:rect.y,w:rect.w,h:rect.h}),p=ocrImage(pix(b),o),out=new Jimp({width:p.width,height:p.height});out.bitmap.data=Buffer.from(p.data);
+ await w.setParameters({tessedit_pageseg_mode:'7',tessedit_char_whitelist:wl});const data=(await w.recognize(await out.getBuffer('image/png'))).data;return details?data:data.text.trim();}
 let n=0;
 for(const src of ['store-fm-room','store-fm-channel','fm-room-16-sky'])for(const [s,canvas] of [[1,false],[1.25,false],[1.5,false],[2,false],[1,true]]){
  let i=await Jimp.read(fileURLToPath(new URL('./fixtures/'+src+'.png',import.meta.url)));if(s!==1)i.resize({w:Math.round(i.bitmap.width*s),h:Math.round(i.bitmap.height*s)});
@@ -24,5 +30,20 @@ for(const src of ['store-fm-room','store-fm-channel','fm-room-16-sky'])for(const
  assert.equal(res?.roomNumber,expected,'room '+expected+': '+label+' '+JSON.stringify(texts));
  assert.ok(res.confidence>=50,'confidence '+res.confidence);n++;
 }
+
+const source=await Jimp.read(fileURLToPath(new URL('./fixtures/store-empty-sold.png',import.meta.url)));
+const fixture=JSON.parse(fs.readFileSync(new URL('./fixtures/store-empty-sold.ocr.json',import.meta.url),'utf8'));
+const scaled=source.clone().resize({w:fixture.width,h:fixture.height,mode:'nearestNeighbor'});
+const pixels=pix(scaled),regions=locateRegions(tsvWords(fixture.tsv),pixels.width,pixels.height,fixture.scale,coinScorer(pixels,fixture.scale),pixels);
+const balance=source.clone().crop(regions.balance);
+const ink=numericInkBounds(pix(balance),1);
+assert.ok(ink,'digits isolated inside the personal mesos field');
+const rect={x:regions.balance.x+ink.x,y:regions.balance.y+ink.y,w:ink.w,h:ink.h};
+const reads=[];
+for(const options of NUMBER_PASSES){
+ reads.push(await read(source,rect,options,'0123456789, .',true));
+}
+assert.equal(majorityNumber(reads,parseTotal),78721,'personal money reads 78,721, excluding the room sign');
 await w.terminate();
+
 console.log('FM room OCR: rooms 8 and 16 read in '+n+' captures, including blue sky, scaling, and a full-screen share.');
