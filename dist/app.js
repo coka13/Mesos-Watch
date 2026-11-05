@@ -23,6 +23,7 @@ let lastAutoDetection={};
 function debugCapture(data){$('capture-debug').textContent=JSON.stringify({source:{width:video.videoWidth,height:video.videoHeight},regions,...lastAutoDetection,...data},null,2);}
 // Debug overlay: region coordinates and the latest OCR result per region, drawn over the preview.
 let lastChat=null,lastReads={},debugOverlay=false;
+let minimapRead=false,channelRead=false;
 let discordReady=false,testing=false,lastSold=null;  // step 03 done; test in flight; latest Sold Items records for the test
 {const t=document.createElement('label');t.className='check';t.innerHTML='<input type="checkbox" id="debug-overlay"> Show coordinates, OCR results and confidence on the preview';debugBox.querySelector('p').after(t);$('debug-overlay').onchange=e=>{debugOverlay=e.target.checked;};}
 // Store name and listed prices stay in this browser. Listed prices let a sale be verified to the exact meso.
@@ -67,8 +68,8 @@ function controls(){
  $('save-item-crop').disabled=!connected||!regions.items||busy;
  for(const id of ['select-items','select-storeItems','select-balance','select-chat','select-sale','auto-detect'])$(id).disabled=!connected||watching||checking||busy;
  $('read').disabled=!connected||!storeRegionsReady(regions)||busy||watching;
- // All three steps are required: each is ticked when done, and Start waits for all of them.
- const steps=[['step-window','01',connected,'Game window shared'],['step-store','02',storeRegionsReady(regions),'Store & mesos found'],['discord-step','03',discordReady,'Discord test delivered']];
+ // All four steps are required: each is ticked when done, and Start waits for all of them.
+ const steps=[['step-window','01',connected,'Game window shared'],['step-store','02',storeRegionsReady(regions),'Store & mesos found'],['publish-step','03',locationReady(),'Map / room and channel confirmed'],['discord-step','04',discordReady,'Discord test delivered']];
  for(const [id,n,done] of steps){const el=$(id),badge=el.querySelector('summary .step');el.classList.toggle('done',done);badge.textContent=done?'✓':n;badge.setAttribute('aria-label',done?'Step '+n+' done':'Step '+n);}
  $('start-checklist').replaceChildren(...steps.map(([,,done,label])=>Object.assign(document.createElement('li'),{className:done?'ok':'',textContent:label})));
  $('start').disabled=!steps.every(s=>s[2])||watching||busy||checking;
@@ -76,7 +77,7 @@ function controls(){
  $('connect').disabled=watching||checking||busy;$('interval').disabled=watching;$('stop').disabled=!watching;
  $('chat-alerts').disabled=watching||busy;
  if($('fm-read-room'))fmControls();
- window.dispatchEvent(new CustomEvent('mesoswatch:setup-progress',{detail:{connected,storeReady:storeRegionsReady(regions),discordReady,watching}}));
+ window.dispatchEvent(new CustomEvent('mesoswatch:setup-progress',{detail:{connected,storeReady:storeRegionsReady(regions),locationReady:locationReady(),discordReady,watching}}));
 }
 function validWebhook(){const raw=$('webhook').value.trim();let url;try{url=new URL(raw);}catch{throw Error('Paste your Discord webhook URL first.');}if(url.protocol!=='https:'||url.hostname!=='discord.com'||!/^\/api\/webhooks\/\d+\/[\w-]+\/?$/.test(url.pathname))throw Error('Use a Discord channel webhook URL from discord.com.');url.search='';url.hash='';url.searchParams.set('wait','true');return url.href;}
 async function send(content,picture,filename='sold-items.png'){
@@ -95,7 +96,7 @@ $('test').onclick=async()=>{if(testing||busy)return;testing=true;controls();try{
   await sendEmbed(saleEmbed({name:item?.name||rec.name,qty:rec.qty,buyer:rec.buyer,balance:lastSold.balance??undefined,icon:item?iconUrl({id:item.item_id,game_id:item.game_id,category:item.category,icon_path:item.icon_path,name:item.name}):null,store:$('mystore-name').value.trim(),location:fm.locationText(fmLoc()),time:new Date().toISOString(),test:'latest'}),lastSold.picture);
   what='Latest sale ('+(item?.name||rec.name)+')';}
  else await sendEmbed(sampleSaleEmbed());
- discordReady=true;status(what+' sent to Discord as a TEST. Check your channel: step 3 is done. No sale was recorded.');}
+ discordReady=true;status(what+' sent to Discord as a TEST. Check your channel: step 4 is done. No sale was recorded.');}
  catch(e){discordReady=false;status('Discord test failed: '+e.message,true);}finally{testing=false;controls();}};
 function stop(message='Watching stopped. Restart to establish a fresh baseline.') {watching=false;clearTimeout(timer);timer=null;$('badge').classList.remove('live');$('badge').replaceChildren(Object.assign(document.createElement('span'),{className:'dot'}),document.createTextNode(' Not watching'));controls();status(message);}
 $('stop').onclick=()=>stop();
@@ -106,7 +107,7 @@ $('connect').onclick=async()=>{
   stream=await navigator.mediaDevices.getDisplayMedia({video:{frameRate:2},audio:false});
   video.srcObject=stream;
   await video.play();
-  regions={};mode=null;
+  minimapRead=false;channelRead=false;regions={};mode=null;
   stream.getVideoTracks()[0].addEventListener('ended',()=>{
    stop('Game sharing ended. Reconnect your window to continue.');
    stream=null;video.srcObject=null;regions={};
@@ -274,7 +275,7 @@ async function checkChat(){
  }else $('chat-status').textContent=result.kind==='unreadable'?'Chat text is unclear. Keep the selected area visible.':result.kind==='pending'?'New chat text detected; confirming the reading…':result.kind==='reset'?'Chat history changed or scrolled. Baseline reset; keep chat at the bottom.':result.kind==='baseline'?'Chat baseline set. Existing messages will not trigger alerts.':'Watching shop chat · '+chatCount+' new message(s) sent.';
 }
 
-$('start').onclick=async()=>{try{validWebhook();if(!discordReady){$('discord-step').open=true;throw Error('Step 3: press "Send test (latest sale)" and check it arrives in Discord before watching.');}if(!storeRegionsReady(regions))throw Error('Select player mesos, store items and Sold Items, then Check reading.');if($('chat-alerts').checked&&$('webhook').value.trim()&&!regions.chat){selectRegion('chat');throw Error('Select the shop-chat area once before starting message alerts.');}chatState={ready:false,keys:[],candidate:null};$('capture-details').open=false;$('crop-details').open=false;state=createSession(crypto.randomUUID());baselineNote.textContent='Session starting mesos: waiting for a reliable reading';watching=true;mode=null;drag=null;$('badge').classList.add('live');$('badge').replaceChildren(Object.assign(document.createElement('span'),{className:'dot'}),document.createTextNode(' Watching'));controls();await tick();}catch(e){stop(e.message);$('status').classList.add('error');}};
+$('start').onclick=async()=>{try{if(!locationReady())throw Error('Read the expanded minimap in the top-left of the game, then confirm your world and channel in Store location.');validWebhook();if(!discordReady){$('discord-step').open=true;throw Error('Step 4: press "Send test (latest sale)" and check it arrives in Discord before watching.');}if(!storeRegionsReady(regions))throw Error('Select player mesos, store items and Sold Items, then Check reading.');if($('chat-alerts').checked&&$('webhook').value.trim()&&!regions.chat){selectRegion('chat');throw Error('Select the shop-chat area once before starting message alerts.');}chatState={ready:false,keys:[],candidate:null};$('capture-details').open=false;$('crop-details').open=false;state=createSession(crypto.randomUUID());baselineNote.textContent='Session starting mesos: waiting for a reliable reading';watching=true;mode=null;drag=null;$('badge').classList.add('live');$('badge').replaceChildren(Object.assign(document.createElement('span'),{className:'dot'}),document.createTextNode(' Watching'));controls();await tick();}catch(e){stop(e.message);$('status').classList.add('error');}};
 const isChange=e=>['unverified','uncertain','balance-change'].includes(e.kind);
 function row(entry,example=false){const r=document.createElement('div');r.className='sale-row'+(entry.kind==='verified'?' verified':isChange(entry)?' uncertain':'');const time=document.createElement('time');time.textContent=new Date(entry.time).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});const text=document.createElement('div'),name=document.createElement('strong'),note=document.createElement('small');if(entry.icon||entry.picture){const img=Object.assign(document.createElement('img'),{src:entry.icon||entry.picture,alt:entry.icon?'':entry.names+' — store snapshot',width:entry.icon?40:96,height:40,loading:'lazy',className:'item-icon',onerror(){if(entry.picture&&this.src!==entry.picture){this.src=entry.picture;this.width=96;this.alt=entry.names+' — store snapshot';}else this.remove();}});name.append(img);}name.append(document.createTextNode(entry.names+(entry.qty>1?' ×'+entry.qty:'')));note.textContent=example?'Example only · no Discord message sent':entry.kind==='verified'?'Verified · '+(entry.buyer?'buyer '+entry.buyer+' · ':'')+(entry.unitPrice?fmt(entry.unitPrice)+' each · ':'')+'received '+fmt(entry.net)+' after fee · '+entry.delivery:entry.delivery+(entry.evidence&&isChange(entry)?' · '+entry.evidence:'')+' · OCR reading';text.append(name,note);const amount=document.createElement('div');amount.className='amount';amount.replaceChildren(mesoAmt(isChange(entry)?(entry.balanceChange>=0?'+':'')+fmt(entry.balanceChange)+' mesos balance change':'+'+fmt(entry.amount)+' mesos',13));r.append(time,text,amount);return r;}
 function renderSales(){try{localStorage.setItem('mw-sales',JSON.stringify(sales.slice(0,500)));}catch{}$('activity-empty').hidden=sales.length>0;$('sales').replaceChildren(...sales.map(s=>row(s)));$('sale-count').textContent=String(sales.filter(s=>s.corroborated===true).length);$('meso-count').replaceChildren(mesoAmt(fmt(sales.filter(s=>s.corroborated===true).reduce((a,s)=>a+s.amount,0)),13),document.createTextNode(' '),Object.assign(document.createElement('small'),{textContent:'mesos'}));$('export').disabled=!sales.length;}
@@ -359,7 +360,7 @@ async function shareSale(result,r){
  try{const n=await reportObservations([{kind:'sale',item:result.names[0],price,qty}],{world:$('world')?.value||''});return n&&n.length?'Shared to price board':'';}catch(e){return'Not shared: '+e.message;}
 }
 
-// ---- Step 04: Free Market location and the store list, published automatically (optional) ----
+// ---- Required location capture and optional store publication ----
 // Room from the expanded minimap in the top-left corner, world and channel from the Change Channel menu, then the store's rows
 // (sold ones are greyed out). A scan publishes to Player Stores straight away once everything is known: the location, store
 // and character name, and for each row an identified item, a price two re-reads agree on, and a clearly sold or for-sale
@@ -369,13 +370,14 @@ var fmBusy=false,fmPublished=false;  // var: controls() runs before this part of
 // FM room or a named map (a store on Hidden Street), never both.
 function fmLoc(){const room=+$('fm-room').value||null;return{world:$('fm-world').value.trim(),channel:+$('fm-channel').value||null,room,mapName:room?'':$('fm-map').value.trim()};}
 function fmModel(loc){return makeLocation({...loc,roomNumber:loc.room,locationSource:'MANUAL'});}  // hoisted: controls() runs first
+function locationReady(){return !!stream&&minimapRead&&channelRead&&locationProblems(fmModel(fmLoc()),{needWorld:true}).length===0;}
 const fmStatus=(text,error=false)=>{$('fm-status').textContent=text;$('fm-status').classList.toggle('error',error);};
-for(const id of ['fm-world','fm-channel','fm-room','fm-map','fm-character']){const key='mw-'+id;try{$(id).value=localStorage.getItem(key)||'';}catch{}$(id).addEventListener('input',()=>{try{localStorage.setItem(key,$(id).value);}catch{}fmControls();});}
+for(const id of ['fm-world','fm-channel','fm-room','fm-map','fm-character']){const key='mw-'+id;try{$(id).value=localStorage.getItem(key)||'';}catch{}$(id).addEventListener('input',()=>{try{localStorage.setItem(key,$(id).value);}catch{}if(id==='fm-room'||id==='fm-map')minimapRead=false;controls();});}
 $('fm-store-name').addEventListener('input',()=>{$('mystore-name').value=$('fm-store-name').value;$('mystore-name').dispatchEvent(new Event('change'));});
 function fmControls(){
- const loc=fmLoc(),idle=!!stream&&!fmBusy&&!checking;
+ const loc=fmLoc(),idle=!!stream&&!fmBusy&&!checking&&!watching;
  $('fm-read-room').disabled=$('fm-read-channel').disabled=!idle;$('fm-read-store').disabled=!idle||!regions.chat;
- $('fm-room-step').classList.toggle('done',loc.room>=1&&loc.room<=99||fmModel(loc).locationType==='NAMED_MAP');
+ $('fm-room-step').classList.toggle('done',minimapRead&&(loc.room>=1&&loc.room<=99||fmModel(loc).locationType==='NAMED_MAP'));
  $('fm-channel-step').classList.toggle('done',!!loc.world&&loc.channel>=1&&loc.channel<=40);
  const problems=locationProblems(fmModel(loc),{needWorld:true});
  $('fm-where').textContent=problems.length?problems.join(' '):'Where to find your store: '+loc.world+' • '+whereToFind(fmModel(loc))+'.';
@@ -394,24 +396,27 @@ const fmTask=fn=>async()=>{if(fmBusy)return;fmBusy=true;fmControls();
  finally{busy=false;fmBusy=false;controls();fmControls();}};
 const keep=(id,value)=>{$(id).value=value;$(id).dispatchEvent(new Event('input'));};
 $('fm-read-room').onclick=fmTask(async()=>{
+ minimapRead=false;channelRead=false;
  const W=video.videoWidth,H=video.videoHeight,corner=fm.roomCorner(W,H);fmStatus('Reading the minimap…');
  // The minimap's blue title panel from pixels; OCR over the corner only when that panel is not found.
  const found=fm.roomLine(framePixels(),corner);let crop=found?.crop,reads=found?fm.roomLineReads(found.h):fm.ROOM_READS;
  if(!crop){const line=fm.findRoomLine(fm.toSource(tsvWords((await readRect(corner,fm.ROOM_FIND,'11')).tsv),corner,fm.ROOM_FIND.scale));if(line)crop=fm.roomLineCrop(line,W,H);}
- if(!crop)throw Error('No "Free Market <room>" in the top-left corner. Expand the minimap (not minimized), drag it to the top-left corner of the game and try again.');
+ if(!crop)throw Error('The minimap title was not found in the top-left corner. Expand the minimap (not minimized), drag it to the top-left corner of the game and try again.');
  const texts=[];for(const o of reads)texts.push((await readRect(crop,o,'7',fm.ROOM_CHARS)).text);
  let res=fm.readMapLine(texts);
  if(!res){const names=[];for(const o of fm.MAP_NAME_READS)names.push((await readRect(crop,found?{...o,scale:Math.max(1,Math.round(o.scale*9.5/found.h))}:o,'7')).text);res=fm.readMapLine(texts,names);}
- if(!res)throw Error('The room number was unclear ('+texts.map(t=>t.trim()).join(' / ')+'). Keep the minimap still and try again, or type the room.');
+ if(!res)throw Error('The room number was unclear ('+texts.map(t=>t.trim()).join(' / ')+'). Keep the minimap still and try again, then press Read map / room again.');
  if(res.roomNumber){keep('fm-map','');keep('fm-room',res.roomNumber);fmStatus('Free Market room '+res.roomNumber+' read. Now open the Change Channel menu and press Read channel.');}
  else{keep('fm-room','');keep('fm-map',res.mapName);fmStatus('Map “'+res.mapName+'” read (not an FM room). Check the name, then open the Change Channel menu and press Read channel.');}
+ minimapRead=true;
 });
 $('fm-read-channel').onclick=fmTask(async()=>{
+ channelRead=false;
  fmStatus('Looking for the Change Channel menu…');
  const grid=fm.channelGrid(framePixels());
  if(!grid)throw Error('Change Channel menu not found. Open it in the game (your channel is the one highlighted in blue) and keep it unobstructed.');
  const world=fm.parseWorld((await readRect(fm.worldBand(grid,video.videoWidth,video.videoHeight),fm.WORLD_READS[0],'6')).text);
- keep('fm-channel',grid.channel);if(world)keep('fm-world',world);
+ keep('fm-channel',grid.channel);if(world)keep('fm-world',world);channelRead=true;
  fmStatus('Channel '+grid.channel+(world?' on '+world:'')+' read.'+(world?'':' The world name was unclear: type it.')+' You can close the menu now.');
 });
 // One scan of the store list: every row checked, then the certain ones published.
