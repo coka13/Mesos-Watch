@@ -164,6 +164,11 @@ function showCrop(id,image){const canvas=$(id);canvas.hidden=false;canvas.width=
 
 const soldIconCache=new Map();
 function soldPicture(picture){return picture?.toDataURL('image/png')||null;}
+function attachItemIcon(card,name){
+  const key=name.replace(/\.{2,}$/,'');
+  if(!soldIconCache.has(key)&&boardConfigured())soldIconCache.set(key,matchNames([key]).then(matches=>{const item=matches.find(m=>m.input===key)||matches[0];return item?.item_id?iconUrl(item):null;}).catch(()=>{soldIconCache.delete(key);return null;}));
+  soldIconCache.get(key)?.then(url=>{if(!url||!card.isConnected)return;const img=Object.assign(document.createElement('img'),{src:url,alt:name,width:40,height:40,className:'sold-item-icon'});img.onerror=()=>img.remove();card.prepend(img);});
+}
 function renderSoldItems(records,picture,empty='No sold items found'){
  const list=$('items-reading');list.replaceChildren();
  const snapshot=$('sold-items-snapshot');snapshot.hidden=!picture;if(picture)snapshot.src=soldPicture(picture);else snapshot.removeAttribute('src');
@@ -173,9 +178,7 @@ function renderSoldItems(records,picture,empty='No sold items found'){
   const text=document.createElement('div'),name=document.createElement('b'),detail=document.createElement('small');
   name.textContent=record.name;detail.textContent=[record.qty?'Quantity: '+record.qty:'',record.buyer?'Buyer: '+record.buyer:'',record.agreed===false?'Reading uncertain':''].filter(Boolean).join(' · ');
   text.append(name,detail);card.append(text);list.append(card);
-  const key=record.name.replace(/\.{2,}$/,'');
-  if(!soldIconCache.has(key)&&boardConfigured())soldIconCache.set(key,matchNames([key]).then(matches=>{const item=matches.find(m=>m.input===key)||matches[0];return item?.item_id?iconUrl(item):null;}).catch(()=>{soldIconCache.delete(key);return null;}));
-  soldIconCache.get(key)?.then(url=>{if(!url||!card.isConnected)return;const img=Object.assign(document.createElement('img'),{src:url,alt:record.name,width:40,height:40,className:'sold-item-icon'});img.onerror=()=>img.remove();card.prepend(img);});
+  attachItemIcon(card,record.name);
  }
 }
 
@@ -195,9 +198,12 @@ async function reading(){
  const storeList=$('store-items-reading');storeList.replaceChildren();
  if(!storeRows.length)storeList.textContent='No store items read. Check the selected store item area.';
  for(const row of storeRows){
-  const line=document.createElement('p');
-  line.textContent=row.item+' · '+row.qty+' for '+fmt(row.bundle)+' mesos'+(row.sold?' · Sold':'');
-  storeList.append(line);
+  const card=document.createElement('div');card.className='sold-item';
+  const text=document.createElement('div'),name=document.createElement('b'),detail=document.createElement('small');
+  name.textContent=row.item;
+  detail.textContent=row.qty+' for '+fmt(row.bundle)+' mesos'+(row.sold?' · Sold':'');
+  text.append(name,detail);card.append(text);storeList.append(card);
+  attachItemIcon(card,row.item);
  }
  const balance=await readBalance(w),visitors=await readChat(w);
   const sold=chooseSoldReading(...itemReads);lastReads.items=sold.records.length+' records · '+Math.round(sold.confidence)+'%';
