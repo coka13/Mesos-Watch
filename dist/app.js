@@ -1,14 +1,14 @@
 import {numericInkBounds} from './numeric-region.mjs';
 import {ocrImage,TEXT_PASSES,NUMBER_PASSES} from './ocr-prep.mjs?v=prep-2';
-import {detectStoreRegions,enhanceFramePixels,storeRegionsReady} from './auto-select.mjs?v=autoselect-8';
+import {detectStoreRegions,enhanceFramePixels,storeRegionsReady} from './auto-select.mjs?v=autoselect-9';
 import {deliverDiscord} from './discord-delivery.mjs';
 import {sourcePoint,validRegion} from './capture-geometry.mjs';
 import {observeChat} from './chat.mjs?v=reader-4';
 import {discordBody,saleEmbed,saleSessionSummary,sampleSaleEmbed} from './notifications.mjs?v=sale-4';
 import {createSession,observeStore} from './store-session.mjs?v=ms-5';
 import {chooseSoldReading,chatVisitors,parsePriceList,majorityNumber,STORE_FEE_RATE} from './sold-items.mjs?v=ms-5';
-import {parseTotal,chooseItemReading} from './detection.mjs?v=reader-4';
-import {tsvWords,locateRegions,frameScale,coinScorer} from './locate.mjs?v=autoselect-8';
+import {parseTotal} from './detection.mjs?v=reader-4';
+import {tsvWords,locateRegions,frameScale,coinScorer} from './locate.mjs?v=autoselect-9';
 import {reportObservations,configured as boardConfigured,matchNames,iconUrl} from './api.mjs?v=ms-4';
 import * as fm from './fm-location.mjs?v=fm-5';
 import {makeLocation,locationProblems,whereToFind} from './location.mjs?v=loc-1';
@@ -65,7 +65,7 @@ function status(text,error=false){$('status').textContent=text;$('status').class
 function controls(){
  const connected=!!stream;
  $('save-item-crop').disabled=!connected||!regions.items||busy;
- for(const id of ['select-total','select-items','select-balance','select-chat','select-sale','auto-detect'])$(id).disabled=!connected||watching||checking||busy;
+ for(const id of ['select-items','select-storeItems','select-balance','select-chat','select-sale','auto-detect'])$(id).disabled=!connected||watching||checking||busy;
  $('read').disabled=!connected||!storeRegionsReady(regions)||busy||watching;
  // All three steps are required: each is ticked when done, and Start waits for all of them.
  const steps=[['step-window','01',connected,'Game window shared'],['step-store','02',storeRegionsReady(regions),'Store & mesos found'],['discord-step','03',discordReady,'Discord test delivered']];
@@ -131,15 +131,15 @@ $('connect').onclick=async()=>{
   return message;
  }
 };
-function draw(){if(!stream)return;const w=video.videoWidth,h=video.videoHeight;if(w&&h&&document.body.dataset.view==='store'&&!document.hidden&&$('capture-details').open){if(preview.width!==w)preview.width=w;if(preview.height!==h)preview.height=h;ctx.drawImage(video,0,0);for(const [name,r]of Object.entries(regions)){if(typeof r!=='object'||!Number.isFinite(r?.x))continue;if(name==='sale'&&regions.items&&['x','y','w','h'].every(k=>r[k]===regions.items[k]))continue;ctx.strokeStyle=name==='chat'?'#c58be5':name==='sale'?'#e58a81':name==='balance'?'#7ba952':name==='total'?'#e8a53b':'#6aa8d1';ctx.lineWidth=Math.max(2,w/400);ctx.strokeRect(r.x,r.y,r.w,r.h);ctx.fillStyle=ctx.strokeStyle;ctx.font=`${Math.max(12,w/100)}px sans-serif`;if(typeof r!=='object'||!Number.isFinite(r?.x))continue;ctx.fillText((name==='chat'?'SHOP CHAT':name==='sale'?'SALE SNAPSHOT':name==='balance'?'MY MESOS':name==='total'?'TOTAL':'SOLD ITEMS')+(debugOverlay?` ${r.x},${r.y} ${r.w}×${r.h}`+(lastReads[name]?' · '+lastReads[name]:''):''),r.x+4,Math.max(15,r.y-5));}if(drag){ctx.strokeStyle='#fff';ctx.lineWidth=3;ctx.strokeRect(drag.x,drag.y,drag.endX-drag.x,drag.endY-drag.y);}}frame=requestAnimationFrame(draw);}
+function draw(){if(!stream)return;const w=video.videoWidth,h=video.videoHeight;if(w&&h&&document.body.dataset.view==='store'&&!document.hidden&&$('capture-details').open){if(preview.width!==w)preview.width=w;if(preview.height!==h)preview.height=h;ctx.drawImage(video,0,0);for(const [name,r]of Object.entries(regions)){if(typeof r!=='object'||!Number.isFinite(r?.x))continue;if(name==='sale'&&regions.items&&['x','y','w','h'].every(k=>r[k]===regions.items[k]))continue;ctx.strokeStyle=name==='chat'?'#c58be5':name==='sale'?'#e58a81':name==='balance'?'#7ba952':name==='total'?'#e8a53b':'#6aa8d1';ctx.lineWidth=Math.max(2,w/400);ctx.strokeRect(r.x,r.y,r.w,r.h);ctx.fillStyle=ctx.strokeStyle;ctx.font=`${Math.max(12,w/100)}px sans-serif`;if(typeof r!=='object'||!Number.isFinite(r?.x))continue;ctx.fillText((name==='chat'?'SHOP CHAT':name==='sale'?'SALE SNAPSHOT':name==='balance'?'MY MESOS':name==='storeItems'?'STORE ITEMS':name==='total'?'TOTAL':'SOLD ITEMS')+(debugOverlay?` ${r.x},${r.y} ${r.w}×${r.h}`+(lastReads[name]?' · '+lastReads[name]:''):''),r.x+4,Math.max(15,r.y-5));}if(drag){ctx.strokeStyle='#fff';ctx.lineWidth=3;ctx.strokeRect(drag.x,drag.y,drag.endX-drag.x,drag.endY-drag.y);}}frame=requestAnimationFrame(draw);}
 function point(e){const b=preview.getBoundingClientRect();return sourcePoint({x:e.clientX,y:e.clientY},{x:b.left,y:b.top,width:b.width,height:b.height},{width:preview.width,height:preview.height});}
 function selectRegion(name){
  mode=name;$('capture-details').open=true;$('capture-details').parentElement.closest('details').open=true;
  $('capture-details').scrollIntoView({block:'center',behavior:'smooth'});
- const instructions={balance:'only the digits of your personal mesos balance.',total:'only the LEFT Total Sales number at the bottom of Sold Items.',items:'only the sold item names.',sale:'the Sold Items panel or item entry, including its icon and name. This area is sent with sale alerts.',chat:'the shop-chat message area, excluding the input box and game-world chat. Keep it scrolled to the bottom.'};
+ const instructions={balance:'only the digits of your personal mesos balance.',storeItems:'your store item list, including item names, quantities and prices.',items:'the entire Sold Items list, including names, buyers and quantities.',sale:'the Sold Items panel or item entry, including its icon and name. This area is sent with sale alerts.',chat:'the shop-chat message area, excluding the input box and game-world chat. Keep it scrolled to the bottom.'};
  status('Drag a rectangle over '+instructions[name]);
 }
-for(const name of ['total','items','balance','chat','sale'])$('select-'+name).onclick=()=>selectRegion(name);
+for(const name of ['items','storeItems','balance','chat','sale'])$('select-'+name).onclick=()=>selectRegion(name);
 
 preview.onpointerdown=e=>{if(!mode||watching||checking)return;preview.setPointerCapture(e.pointerId);const p=point(e);drag={...p,endX:p.x,endY:p.y};};
 preview.onpointermove=e=>{if(drag){const p=point(e);drag.endX=p.x;drag.endY=p.y;}};
@@ -147,7 +147,7 @@ preview.onpointerup=e=>{
  if(!drag)return;
  const p=point(e),r={x:Math.round(Math.min(drag.x,p.x)),y:Math.round(Math.min(drag.y,p.y)),w:Math.round(Math.abs(p.x-drag.x)),h:Math.round(Math.abs(p.y-drag.y))};
  if(r.w>=10&&r.h>=8){
-  regions[mode]=r;$('capture-details').open=false;
+  regions[mode]=r;if(mode==='items')regions.mode='sold-items';$('capture-details').open=false;
   if(mode==='chat')$('chat-status').textContent='Chat area selected. New messages will be watched when you start; keep chat scrolled to the bottom.';
   status('Capture area saved. The preview is hidden.');
  }else status('That area is too small. Try dragging a larger rectangle.',true);
@@ -183,12 +183,23 @@ async function getWorker(){if(worker)return worker;if(!workerPromise){workerProm
 async function reading(){
  const itemsImage=crop('items',1,true),picture=crop('items');
  showCrop('items-crop',crop('items',2,true));
- const w=await getWorker();let t={data:{text:'',confidence:0}},t2=t,a=null,b=null,total=null;
- if(regions.total){const totalImage=crop('total');showCrop('total-crop',crop('total',2));await w.setParameters({tessedit_pageseg_mode:'7',tessedit_char_whitelist:'0123456789, .'});const reads=await readAll(w,totalImage,NUMBER_PASSES);t={data:reads[0]};t2={data:reads[1]};a=parseTotal(t.data.text);b=parseTotal(t2.data.text);total=majorityNumber(reads,parseTotal);}
+ const w=await getWorker();
  await w.setParameters({tessedit_pageseg_mode:'6',tessedit_char_whitelist:''});
- const itemReads=await readAll(w,itemsImage,regions.mode==='sold-items'?TEXT_PASSES:TEXT_PASSES.slice(0,2)),[i,i2]=itemReads.map(data=>({data}));
+ const itemReads=await readAll(w,itemsImage,TEXT_PASSES);
+ const storeReadings=[];
+ for(const options of fm.LIST_READS){
+  const data=await readRect(regions.storeItems,options,'6');
+  storeReadings.push(fm.parseStoreRows(fm.toSource(tsvWords(data.tsv),regions.storeItems,options.scale)));
+ }
+ const storeRows=fm.mergeStoreRows(storeReadings,framePixels());
+ const storeList=$('store-items-reading');storeList.replaceChildren();
+ if(!storeRows.length)storeList.textContent='No store items read. Check the selected store item area.';
+ for(const row of storeRows){
+  const line=document.createElement('p');
+  line.textContent=row.item+' · '+row.qty+' for '+fmt(row.bundle)+' mesos'+(row.sold?' · Sold':'');
+  storeList.append(line);
+ }
  const balance=await readBalance(w),visitors=await readChat(w);
- if(regions.mode==='sold-items'){
   const sold=chooseSoldReading(...itemReads);lastReads.items=sold.records.length+' records · '+Math.round(sold.confidence)+'%';
   $('sales-total-card').hidden=true;
   renderSoldItems(sold.records,picture,'No Sold Items records found');
@@ -201,20 +212,7 @@ async function reading(){
   if(sold.records.length)lastSold={records:sold.records,balance,picture};
   return{mode:'sold-items',balance,records:sold.records,confidence:sold.confidence,visitors,prices:parsePriceList($('listed-prices').value),feeRate:STORE_FEE_RATE,picture,raw:itemReads.map(r=>r.text).join('\n')};
  }
- const chosen=chooseItemReading(i.data,i2.data);
- $('sales-total-card').hidden=false;
- $('total-reading').textContent=total===null?'Reselect total':fmt(total)+' mesos';
- renderSoldItems((chosen.display||'').split('\n').filter(Boolean).map(name=>({name})),picture,'No item names found — select the names only');
- $('items-reading').classList.toggle('uncertain',!chosen.itemReliable);
- $('item-quality').textContent=chosen.itemReliable?'Both readings agree. Compare the spelling with the item crop.':'Uncertain item text — this spelling will not be sent as a sale item. Compare the crop or save it for troubleshooting.';
- $('item-quality').classList.toggle('uncertain',!chosen.itemReliable);
- $('raw-ocr').textContent='Total pass 1: '+t.data.text.trim()+'\nTotal pass 2: '+t2.data.text.trim()+'\n\nItem pass 1:\n'+i.data.text.trim()+'\n\nItem pass 2:\n'+i2.data.text.trim();
- const confidence=regions.mode==='sold-items'?chosen.confidence:Math.min(t.data.confidence,t2.data.confidence);
- $('ocr-quality').textContent=(regions.mode==='sold-items'?'No cumulative sales total · item confidence: '+Math.round(confidence)+'% · ':'Total confidence: '+Math.round(Math.min(t.data.confidence,t2.data.confidence))+'% · ')+ 'Item text: '+Math.round(chosen.confidence)+'%'+(a!==b?' · Total readings disagree':'');
- debugCapture({total,balance,confidence:Math.min(t.data.confidence,t2.data.confidence),selectedItemOCR:[i.data.text,i2.data.text]});
- return{mode:regions.mode||'total',total,balance,rawFirst:i.data.text,rawSecond:i2.data.text,raw:i.data.text+'\n'+i2.data.text,items:chosen.items,itemReliable:chosen.itemReliable,confidence,picture};
-}
-$('read').onclick=async()=>{if(busy)return;busy=true;checking=true;controls();try{const r=await reading();const bad=r.balance===null||r.confidence<65||(r.mode!=='sold-items'&&r.total===null);status(bad?'A selected region is unreadable. Check the crops and retry.':r.mode==='sold-items'?'Sold Items and balance read. This layout has no sales total; changes will remain unverified.':'Reading complete. Compare the total and item text with your game before starting.',bad);}catch(e){status(e.message,true);}finally{busy=false;checking=false;controls();}};
+$('read').onclick=async()=>{if(busy)return;busy=true;checking=true;controls();try{const r=await reading();const bad=r.balance===null||r.confidence<50;status(bad?'A selected region is unreadable. Check the crops and retry.':'Player mesos, store items and Sold Items read. Compare them with your game before starting.',bad);}catch(e){status(e.message,true);}finally{busy=false;checking=false;controls();}};
 async function tick(){
  if(!watching)return;if(busy){timer=setTimeout(tick,1500);return;}if(redetect){redetect=false;await autoDetect(true);if(!watching)return;}busy=true;controls();
  try{
@@ -223,7 +221,7 @@ async function tick(){
   if(result.kind==='reset'){stop('The sales total decreased. Check the shop, then restart with a new baseline.');return;}
   state=result.state;
   baselineNote.textContent=state.initialBalance===null?'Session starting mesos: not set':'Session starting mesos: '+fmt(state.initialBalance)+' · current change: '+(r.balance===null?'unreadable':fmt(r.balance-state.initialBalance))+' mesos';
-  if(result.kind==='unreadable')status('Sales total unclear. No sale alert sent; checking again next time.',true);
+  if(result.kind==='unreadable')status('Player mesos or Sold Items unreadable. Checking again next time.',true);
   else if(result.kind==='uncertain'||result.kind==='balance-change'){
    const names=result.kind==='balance-change'?'Mesos changed with no new Sold Items record':(result.records||[]).map(x=>x.name+' ×'+x.qty).join(', ')||'Sold Items changed';
    sales.unshift({time:new Date().toISOString(),sessionId:state.id,initialBalance:state.initialBalance,kind:result.kind,names,amount:null,balanceChange:result.balanceChange,corroborated:false,evidence:result.reason,delivery:result.kind==='balance-change'?'Not a sale · kept for your balance timeline':'Uncertain · no Discord alert or market contribution'});
@@ -270,7 +268,7 @@ async function checkChat(){
  }else $('chat-status').textContent=result.kind==='unreadable'?'Chat text is unclear. Keep the selected area visible.':result.kind==='pending'?'New chat text detected; confirming the reading…':result.kind==='reset'?'Chat history changed or scrolled. Baseline reset; keep chat at the bottom.':result.kind==='baseline'?'Chat baseline set. Existing messages will not trigger alerts.':'Watching shop chat · '+chatCount+' new message(s) sent.';
 }
 
-$('start').onclick=async()=>{try{validWebhook();if(!discordReady){$('discord-step').open=true;throw Error('Step 3: press "Send test (latest sale)" and check it arrives in Discord before watching.');}if(!storeRegionsReady(regions))throw Error('Keep Sold Items and personal mesos visible, then run Auto Select. Select Total Sales too only if this layout shows it.');if($('chat-alerts').checked&&$('webhook').value.trim()&&!regions.chat){selectRegion('chat');throw Error('Select the shop-chat area once before starting message alerts.');}chatState={ready:false,keys:[],candidate:null};$('capture-details').open=false;$('crop-details').open=false;state=createSession(crypto.randomUUID());baselineNote.textContent='Session starting mesos: waiting for a reliable reading';watching=true;mode=null;drag=null;$('badge').classList.add('live');$('badge').replaceChildren(Object.assign(document.createElement('span'),{className:'dot'}),document.createTextNode(' Watching'));controls();await tick();}catch(e){stop(e.message);$('status').classList.add('error');}};
+$('start').onclick=async()=>{try{validWebhook();if(!discordReady){$('discord-step').open=true;throw Error('Step 3: press "Send test (latest sale)" and check it arrives in Discord before watching.');}if(!storeRegionsReady(regions))throw Error('Select player mesos, store items and Sold Items, then Check reading.');if($('chat-alerts').checked&&$('webhook').value.trim()&&!regions.chat){selectRegion('chat');throw Error('Select the shop-chat area once before starting message alerts.');}chatState={ready:false,keys:[],candidate:null};$('capture-details').open=false;$('crop-details').open=false;state=createSession(crypto.randomUUID());baselineNote.textContent='Session starting mesos: waiting for a reliable reading';watching=true;mode=null;drag=null;$('badge').classList.add('live');$('badge').replaceChildren(Object.assign(document.createElement('span'),{className:'dot'}),document.createTextNode(' Watching'));controls();await tick();}catch(e){stop(e.message);$('status').classList.add('error');}};
 const isChange=e=>['unverified','uncertain','balance-change'].includes(e.kind);
 function row(entry,example=false){const r=document.createElement('div');r.className='sale-row'+(entry.kind==='verified'?' verified':isChange(entry)?' uncertain':'');const time=document.createElement('time');time.textContent=new Date(entry.time).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});const text=document.createElement('div'),name=document.createElement('strong'),note=document.createElement('small');if(entry.icon||entry.picture){const img=Object.assign(document.createElement('img'),{src:entry.icon||entry.picture,alt:entry.icon?'':entry.names+' — store snapshot',width:entry.icon?40:96,height:40,loading:'lazy',className:'item-icon',onerror(){if(entry.picture&&this.src!==entry.picture){this.src=entry.picture;this.width=96;this.alt=entry.names+' — store snapshot';}else this.remove();}});name.append(img);}name.append(document.createTextNode(entry.names+(entry.qty>1?' ×'+entry.qty:'')));note.textContent=example?'Example only · no Discord message sent':entry.kind==='verified'?'Verified · '+(entry.buyer?'buyer '+entry.buyer+' · ':'')+(entry.unitPrice?fmt(entry.unitPrice)+' each · ':'')+'received '+fmt(entry.net)+' after fee · '+entry.delivery:entry.delivery+(entry.evidence&&isChange(entry)?' · '+entry.evidence:'')+' · OCR reading';text.append(name,note);const amount=document.createElement('div');amount.className='amount';amount.replaceChildren(mesoAmt(isChange(entry)?(entry.balanceChange>=0?'+':'')+fmt(entry.balanceChange)+' mesos balance change':'+'+fmt(entry.amount)+' mesos',13));r.append(time,text,amount);return r;}
 function renderSales(){try{localStorage.setItem('mw-sales',JSON.stringify(sales.slice(0,500)));}catch{}$('activity-empty').hidden=sales.length>0;$('sales').replaceChildren(...sales.map(s=>row(s)));$('sale-count').textContent=String(sales.filter(s=>s.corroborated===true).length);$('meso-count').replaceChildren(mesoAmt(fmt(sales.filter(s=>s.corroborated===true).reduce((a,s)=>a+s.amount,0)),13),document.createTextNode(' '),Object.assign(document.createElement('small'),{textContent:'mesos'}));$('export').disabled=!sales.length;}
@@ -289,14 +287,14 @@ async function readBalance(w){
  const reads=await readAll(w,source,NUMBER_PASSES),first=majorityNumber(reads,parseTotal),reliable=first!==null;
  lastReads.balance=(reliable?fmt(first):'unclear')+' · '+Math.round(middle(reads))+'%';
  $('balance-reading').replaceChildren(reliable?mesoAmt(fmt(first),15):document.createTextNode('Unclear'));
- $('balance-note').textContent=reliable?'Personal mesos · checked '+new Date().toLocaleTimeString():'Balance unreadable. Keep inventory visible or reselect the digits.';
+ $('balance-note').textContent=reliable?'Personal mesos · checked '+new Date().toLocaleTimeString():'Balance unreadable. Keep the money field beneath Close Store visible or reselect its digits.';
  return reliable?first:null;
 }
 async function autoDetect(background=false){
  if(!stream||busy||(watching&&!background))return;
  busy=true;checking=true;mode=null;drag=null;controls();
  try{
-  status('Looking for Sold Items, sales totals, and your mesos balance…');
+  status('Looking for player mesos, store items and Sold Items…');
   const captureStream=stream,sourceWidth=video.videoWidth,sourceHeight=video.videoHeight;
   if(!sourceWidth||!sourceHeight||video.readyState<2)throw Error('The shared video has not produced a frame yet. Wait for the preview, then retry Auto Select.');
   const scale=frameScale(sourceWidth),c=document.createElement('canvas');
@@ -315,10 +313,10 @@ async function autoDetect(background=false){
   if(background&&!storeRegionsReady(found)){stop('Could not relocate all store evidence areas. Review Auto Select before restarting.');return;}
   if(background&&!found.chat&&regions.chat&&regions.sale&&found.sale&&['x','y','w','h'].some(k=>Math.abs(regions.sale[k]-found.sale[k])>5)){stop('Store layout moved. Reselect shop chat before restarting to avoid sending the wrong area.');return;}
   regions={...found,...(!found.chat&&regions.chat?{chat:regions.chat}:{})};layoutSig=regionSig();
-  if(background){status(storeRegionsReady(found)?'Your windows moved. Areas re-detected automatically; still watching.':'Your windows moved and the Sales total could not be found again. Keep Sold Items visible or select it manually.',!found.total);return;}
+  if(background){status('Your windows moved. Player mesos, store items and Sold Items were re-detected.');return;}
   if(storeRegionsReady(regions))await reading();else if(regions.balance)await readBalance(w);
-  const missing=[];if(!found.items||(found.mode!=='sold-items'&&!found.total))missing.push('Sold Items / Total Sales');if(!found.balance)missing.push('personal mesos');
-  status(missing.length?'Auto-detection could not confidently locate '+missing.join(' and ')+' after alternate OCR passes. Keep both panels unobstructed and try Auto Select again; missing regions remain unselected.':found.mode==='sold-items'?'Found Sold Items and your personal mesos'+(found.chat?' and shop chat':'')+'. No Total Sales is shown in this layout; balance and item changes remain unverified.':'Found Sold Items, Total Sales, and your personal mesos. Check the highlighted areas before starting.'+(found.totalEstimated?' The Total Sales number was hard to read, so its area is an estimate: make sure the highlight covers the number.':''),missing.length>0);
+  const missing=[];if(!found.items)missing.push('Sold Items');if(!found.storeItems)missing.push('store items');if(!found.balance)missing.push('player mesos');
+  status(missing.length?'Select '+missing.join(' and ')+' manually in the capture preview, then Check reading.':'Found player mesos, store items and Sold Items'+(found.chat?' and shop chat':'')+'. Check the highlighted areas before starting.',missing.length>0);
  }catch(e){debugCapture({failure:e.message});status('Auto-detection unavailable: '+e.message+' You can select the areas manually.',true);}
  finally{busy=false;checking=false;controls();}
 }
