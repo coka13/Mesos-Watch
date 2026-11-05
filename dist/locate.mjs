@@ -107,17 +107,18 @@ export function locateRegions(words,width,height,scale=1,coinScore=()=>0,pixels=
   const column=l=>l.x>=left-4*scale&&l.x<totalLabel.x+60*scale&&l.y<totalLabel.y;
   const buyers=lines.filter(l=>column(l)&&/^(buyer|number\s*purchased)\b/i.test(l.text)).sort((a,b)=>a.y-b.y);
   const title=lines.find(l=>/sold\s*[il]tems/i.test(l.text)&&l.y<totalLabel.y&&l.x<totalLabel.x+260*scale&&l.x+l.w>left);
-  const entryH=totalLabel.h*4.8;
   let listTop=null;
   if(buyers.length){const first=buyers[0];const name=lines.filter(l=>column(l)&&l.y<first.y&&first.y-l.y<first.h*2.4).sort((a,b)=>b.y-a.y)[0];listTop=(name||first).y-4*scale;}
   else if(title)listTop=title.y+title.h+5*scale;
-  else listTop=Math.max(0,totalLabel.y-entryH*2);  // no sales yet: an estimate, refreshed when the window changes
-  const inList=lines.filter(l=>column(l)&&l.y>=listTop&&l.y<totalLabel.y);
-  const right=Math.max(totalLabel.x+totalLabel.w,receivedLabel?receivedLabel.x+receivedLabel.w:0,...inList.map(l=>l.x+l.w))+12*scale;
-  const bottom=Math.max(totalLabel.y+totalLabel.h,...nums.map(n=>n.y+n.h))+8*scale;
-  if(totalLabel.y-listTop>15*scale){result.items=rect({x:left+4*scale,y:listTop,w:right-left-8*scale,h:totalLabel.y-listTop-4*scale});result.itemsEstimated=!buyers.length&&!title;}
-  shop={x:left,y:Math.min(listTop,title?title.y-6*scale:listTop)-4*scale,w:right-left};shop.h=bottom-shop.y;
-  result.sale=rect(shop);
+  // Empty panels have no item anchors. Their list can be above or below the totals.
+  if(listTop!==null){
+   const inList=lines.filter(l=>column(l)&&l.y>=listTop&&l.y<totalLabel.y);
+   const right=Math.max(totalLabel.x+totalLabel.w,receivedLabel?receivedLabel.x+receivedLabel.w:0,...inList.map(l=>l.x+l.w))+12*scale;
+   const bottom=Math.max(totalLabel.y+totalLabel.h,...nums.map(n=>n.y+n.h))+8*scale;
+   if(totalLabel.y-listTop>15*scale){result.items=rect({x:left+4*scale,y:listTop,w:right-left-8*scale,h:totalLabel.y-listTop-4*scale});result.itemsEstimated=!buyers.length&&!title;}
+   shop={x:left,y:Math.min(listTop,title?title.y-6*scale:listTop)-4*scale,w:right-left};shop.h=bottom-shop.y;
+   result.sale=rect(shop);
+  }
  }
  // Some Classic shop layouts have a scrolling Sold Items panel with no cumulative Sales total.
  // Locate repeated Buyer / Number purchased records independently; never substitute the personal balance for Sales.

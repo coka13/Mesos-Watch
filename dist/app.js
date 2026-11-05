@@ -1,6 +1,6 @@
 import {numericInkBounds} from './numeric-region.mjs';
 import {ocrImage,TEXT_PASSES,NUMBER_PASSES} from './ocr-prep.mjs?v=prep-2';
-import {detectStoreRegions,enhanceFramePixels,storeRegionsReady} from './auto-select.mjs?v=autoselect-7';
+import {detectStoreRegions,enhanceFramePixels,storeRegionsReady} from './auto-select.mjs?v=autoselect-8';
 import {deliverDiscord} from './discord-delivery.mjs';
 import {sourcePoint,validRegion} from './capture-geometry.mjs';
 import {observeChat} from './chat.mjs?v=reader-4';
@@ -8,9 +8,9 @@ import {discordBody,saleEmbed,saleSessionSummary,sampleSaleEmbed} from './notifi
 import {createSession,observeStore} from './store-session.mjs?v=ms-5';
 import {chooseSoldReading,chatVisitors,parsePriceList,majorityNumber,STORE_FEE_RATE} from './sold-items.mjs?v=ms-5';
 import {parseTotal,chooseItemReading} from './detection.mjs?v=reader-4';
-import {tsvWords,locateRegions,frameScale,coinScorer} from './locate.mjs?v=autoselect-7';
+import {tsvWords,locateRegions,frameScale,coinScorer} from './locate.mjs?v=autoselect-8';
 import {reportObservations,configured as boardConfigured,matchNames,iconUrl} from './api.mjs?v=ms-4';
-import * as fm from './fm-location.mjs?v=fm-4';
+import * as fm from './fm-location.mjs?v=fm-5';
 import {makeLocation,locationProblems,whereToFind} from './location.mjs?v=loc-1';
 import {needAccount,SignInNeeded,ownStores,saveStore,saveListing,storeListings} from './community-api.mjs';
 const $=id=>document.getElementById(id);
