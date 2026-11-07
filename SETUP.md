@@ -24,6 +24,25 @@ Applied to production with `run-sql.mjs`: migration `20261104000300_market_parit
   - Bulk import only from a file NiaDB has permitted: `node scripts/import-reference-prices.mjs --file prices.json --permission "<who granted it, how, when>" [--dry-run]`. It never downloads anything, and it checks every row before writing.
   - No NiaDB data has been imported. Nothing on the site fetches from NiaDB.
 
+## Market depth and the Companion (not applied yet)
+
+`supabase/migrations/20261107000000_market_depth.sql` is ready and tested on PGlite, and is **not applied to production**. It is additive: every earlier function keeps its signature, the published site keeps working, and the new `dist/` falls back to the older functions until it is applied, so either can go first. Apply it, then publish `dist/`:
+
+```powershell
+node scripts/run-sql.mjs supabase/migrations/20261107000000_market_depth.sql
+```
+
+- **Windows:** `market_index_window` and `item_stats` report 1, 7, 14, 30 or 90 days, with stale listings, repeat sightings, and prices 5x from the median (flagged, and left out of the lowest price).
+- **Lifecycle:** `observations.gone_at`, `close_missing_listings`, and the `listing_closures` audit table. Only a titled shop of three rows or fewer closes anything, so a scrolled list cannot.
+- **Flips:** `market_flips` compares the lowest credible listing with typical prices after the 3% store fee, and names the basis.
+- **Alerts:** `evaluate_price_alerts` now uses the best open listing of the last hour rather than the newest sighting.
+- **Rankings:** `character_rankings`, written only through `report_character`. Self-reported: there is no verification.
+- **Notice:** a site-wide banner. `insert into site_settings(key,value) values('site_notice','Game maintenance until 18:00.') on conflict(key) do update set value=excluded.value;`, and delete the row to clear it.
+
+Production has no row in `admins`, so nobody can currently review sales, reports, megaphones or Cash Shop candidates. Add one for your own account: `insert into admins(user_id) select id from auth.users where email='<your email>';`
+
+Refresh the game data after a patch with `npm run build-classic-data`, which checks each file against the dataset's published hashes. It writes `dist/classic-data.json`, and the page cites the data's date.
+
 ## Deployment order
 
 1. Put the Session pooler connection string in `.env.local` as `SUPABASE_DB_URL` (never commit it).
