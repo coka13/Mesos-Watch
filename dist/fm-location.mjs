@@ -3,7 +3,7 @@
 //  - World and channel: the Change Channel menu; the current channel is the one blue cell in a grid of grey cells.
 //  - Store list: the rows left of the shop chat, "Orange Potion / 1 for 125 mesos"; sold rows are greyed out.
 // Pure functions over OCR words (tsvWords) and RGBA pixels {data,width,height}, shared by app.js and the tests.
-import {rowsOf} from './locate.mjs?v=autoselect-9';
+import {rowsOf} from './locate.mjs?v=depth-1';
 import {cleanMapName,looksLikeFm} from './location.mjs?v=loc-1';
 
 const lum=(px,x,y)=>{const p=(y*px.width+x)*4,d=px.data;return .299*d[p]+.587*d[p+1]+.114*d[p+2];};
@@ -101,6 +101,20 @@ export function channelGrid(px){
 export const worldBand=(grid,W,H)=>clampRect({x:grid.left,y:grid.top-grid.cellH*2.6,w:grid.cellW*4,h:grid.cellH*2.1},W,H);
 export const WORLD_READS=[{scale:4,binarize:true}];  // block mode (psm 6): the wing icon precedes the name
 export function parseWorld(text){const m=String(text||'').match(/[A-Za-z]{3,16}/g);if(!m)return null;const w=m.sort((a,b)=>b.length-a.length)[0];return w[0].toUpperCase()+w.slice(1).toLowerCase();}
+
+// ---- The owner's own store, seen from its buttons ----
+// Only the owner's window has Sold Items (lime) above Close Store (orange), equally wide and left-aligned. OCR misses those small labels
+// in a small capture, and the scanner must never publish the player's own store as an FM listing; their colours need no reading.
+const limeButton=(px,x,y)=>{const p=(y*px.width+x)*4,[r,g,b]=[px.data[p],px.data[p+1],px.data[p+2]];return g>=130&&b<=120&&g-b>=60&&r>=80&&r<=205&&g-r>=10;};
+const orangeButton=(px,x,y)=>{const p=(y*px.width+x)*4,[r,g,b]=[px.data[p],px.data[p+1],px.data[p+2]];return r>=200&&g>=95&&g<=175&&b<=120&&r-b>=100&&r-g>=40;};
+const buttonLike=c=>c.w>=26&&c.h>=6&&c.w/c.h>=2.2&&c.w/c.h<=8&&c.n>=c.w*c.h*.3;
+export function ownerControls(px){
+ const lime=components(px,limeButton).filter(buttonLike);if(!lime.length)return false;
+ const orange=components(px,orangeButton).filter(buttonLike);
+ return lime.some(a=>orange.some(b=>Math.abs(a.x-b.x)<=a.h*1.2&&Math.abs(a.w-b.w)<=a.w*.25&&b.y>a.y&&b.y-a.y<=a.h*6));
+}
+// The list a shop row belongs to, sized from the row's own name-and-price block: its icons, and up to five rows either way.
+export const shopListArea=(block,W,H)=>clampRect({x:block.x-block.h*1.3,y:block.y-block.h*7,w:block.h*6.2,h:block.h*14},W,H);
 
 // ---- The owner's store list ----
 // Left of the shop chat window, as wide as the chat and as tall; includes the list's icons and scrollbar, which parsing skips.

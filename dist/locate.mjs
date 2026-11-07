@@ -194,7 +194,7 @@ export function locateRegions(words,width,height,scale=1,coinScore=()=>0,pixels=
   if(field){personalField=field;result.balance=rect(field);}
  }
  if(pixels){
-  const prices=lines.filter(line=>/^\d+\s*for\s*[\d,]+\s*mesos\b/i.test(line.text)&&(!chatArea||line.x<chatArea.x));
+  const prices=lines.filter(line=>/^\d+\s*[ft][o0]r\s*[\d,]+\s*m[e3]s[o0]s\b/i.test(line.text)&&(!chatArea||line.x<chatArea.x));
   for(const price of prices){
    const table=findItemTable(pixels,price,ui);
    if(table){result.storeItems=rect(table);break;}

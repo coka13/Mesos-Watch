@@ -1,17 +1,18 @@
-import {iconEl,mesoAmt} from './checker.mjs?v=ms-8';
+import {iconEl,mesoAmt} from './checker.mjs?v=depth-1';
 // Live FM Scanner: reads any shop window in the shared game window and contributes its listings to the price database.
 // Screen reading only: no clicks, no keyboard input, no game memory. Players roam the FM however they like.
 // Publishing is automatic, with no review step, and only of what was read with certainty: every listing carries where to find
 // it (location.mjs: world, channel, and an FM room or a named map), a catalog item, and a price two reads agree on. Listings
 // seen while the location is incomplete wait, unpublished, and are published by a later scan once it is known; nothing is
 // filled in. Greyed-out rows are sold sightings (their listed price, never a sale price), and end the matching asking price.
-import {tsvWords,frameScale} from './locate.mjs?v=autoselect-7';
-import {readShop,confirmed,listingKey,averageHash,shopKeyOf,parsePriceLine,cleanName} from './shop.mjs?v=pc-4';
-import * as fm from './fm-location.mjs?v=fm-4';
+import {tsvWords,frameScale} from './locate.mjs?v=depth-1';
+import {readShop,confirmed,listingKey,averageHash,shopKeyOf,parsePriceLine,cleanName,titleAbove} from './shop.mjs?v=depth-1';
+import * as fm from './fm-location.mjs?v=depth-1';
 import {makeLocation,locationProblems,whereToFind,locationColumns} from './location.mjs?v=loc-2';
 import {ocrImage,TEXT_PASSES} from './ocr-prep.mjs?v=prep-2';
-import {configured,reportObservations,reportSoldSightings,shareIcon,worlds} from './api.mjs?v=ms-4';
+import {configured,reportObservations,reportSoldSightings,shareIcon,worlds,closeMissingListings,marketIndexWindow} from './api.mjs?v=depth-1';
 import {createShopMemory} from './shop-identity.mjs?v=1';
+import {MIN,vsTypical,INSUFFICIENT} from './price-source.mjs?v=1';
 const $=id=>document.getElementById(id);
 const fmt=n=>Number(n).toLocaleString('en-US');
 const cap=()=>window.mesosCapture;
@@ -127,6 +128,27 @@ async function verify(w,video,listings){
  return out;
 }
 
+// A shop window lists up to six rows and scrolls. Three or fewer on screen cannot be a scrolled part of a longer list.
+const COMPLETE_SHOP_ROWS=3;
+// Greyed-out rows are too faint for the full-frame pass, so the list is read again around a row it did find, with faint grey stretched
+// to full contrast. Each new row is then checked as Store Watcher checks its own: its look decides sold or for sale, and the price counts
+// only when two re-reads agree with the list reading. Returns the rows the first pass missed.
+async function readListRows(w,frame,px,found,anchor){
+ const W=frame.width,H=frame.height,area=fm.shopListArea(anchor,W,H),reads=[];
+ for(const o of fm.LIST_READS)reads.push(fm.parseStoreRows(fm.toSource(tsvWords((await readCrop(w,frame,area,o,'6')).tsv),area,o.scale)));
+ const rows=fm.mergeStoreRows(reads,px),out=[];
+ for(const r of rows){
+  if(found.some(l=>Math.abs(l.box.y-r.box.y)<r.box.h*.6))continue;
+  const nameBox=fm.rowNameBox(r),state=fm.rowState(px,nameBox,r.priceBox);
+  const row={item:r.item,qty:r.qty,price:r.price,stats:{},nameConf:70,certain:true,nameBox,priceBox:r.priceBox,box:r.box,icon:fm.storeIconArea(r,rows,W,H),state,sold:state==='sold'};
+  if(state==='uncertain'){out.push(row);continue;}
+  const texts=[];for(const o of fm.PRICE_READS)texts.push((await readCrop(w,frame,fm.lineBox(r.priceBox,W,H),{...o,levels:state==='sold'?fm.SOLD_LEVELS:null},'7',fm.PRICE_CHARS)).text);
+  const price=fm.agreedPrice(r,texts);if(!price){st.rejected++;continue;}
+  out.push({...row,qty:price.qty,price:price.price});
+ }
+ return out;
+}
+
 let scanRun=0,channelPromptShown=false;
 const channelDialog=$('scan-channel-dialog');
 window.addEventListener('mesoswatch:view',event=>{
@@ -221,8 +243,16 @@ async function scanOnce(){
    const r=await w.recognize(c,{},{text:true,tsv:true});
    // OCR boxes come from the scaled frame; everything after this works in native window pixels.
    const found=readShop(tsvWords(r.data.tsv)),s=v=>Math.round(v/scale),sb=b=>({x:s(b.x),y:s(b.y),w:s(b.w),h:s(b.h)});
-   found.listings=await verify(w,frame,found.listings.map(l=>{const nameBox=sb(l.nameBox),priceBox=sb(l.priceBox),state=fm.rowState(px,nameBox,priceBox);
-    return{...l,box:sb(l.box),icon:sb(l.icon),nameBox,priceBox,state,sold:state==='sold'};}));
+   found.ownStore||=fm.ownerControls(px);
+   const seen=found.listings.map(l=>{const nameBox=sb(l.nameBox),priceBox=sb(l.priceBox),state=fm.rowState(px,nameBox,priceBox);
+    return{...l,box:sb(l.box),icon:sb(l.icon),nameBox,priceBox,state,sold:state==='sold'};});
+   found.listings=await verify(w,frame,seen);
+   if(seen.length&&!found.ownStore){
+    found.listings.push(...await readListRows(w,frame,px,found.listings,seen[0].box));
+    // The title sits above the topmost row, which may be one the first pass could not see.
+    const top=found.listings.reduce((a,b)=>a.box.y<b.box.y?a:b,seen[0]),title=titleAbove(found.lines,{x:top.box.x*scale,y:top.box.y*scale,w:top.box.w*scale,h:top.box.h*scale});
+    if(title.shopTitle){found.shopTitle=title.shopTitle;found.titleBox=title.titleBox;}
+   }
    if(found.titleBox)found.shopTitle=await readTitle(w,frame,sb(found.titleBox),found.shopTitle);
    return found;
   });
@@ -235,6 +265,7 @@ async function scanOnce(){
   if(shop.ownStore){st.waiting=0;st.last=[];st.shop={title:'',active:0,sold:0,uncertain:0};if(run===scanRun)drawOverlay(frame,[],new Set());report('This is your own store (its Sold Items / Close Store buttons are visible), so it is not shared as an FM listing. Track it in My Store, or publish it under Player Stores.','warn');return;}
   const listings=shop.listings,count=k=>listings.filter(l=>l.state===k).length;
   st.shop={title:shop.shopTitle||'',active:count('active'),sold:count('sold'),uncertain:count('uncertain')};
+  if(!pending)priceCheck(listings).catch(()=>{});
   // Listings wait for the Change Channel check without a channel, so their combined confidence is only known once it is read.
   const base=pending?.location??currentLocation(shop.shopTitle);
   const loc={...base,channel:pending?grid.channel:null,locationConfidence:pending?(Number.isFinite(base.placeConfidence)?Math.min(base.placeConfidence,GRID_CHANNEL_CONFIDENCE):null):base.locationConfidence};
@@ -277,6 +308,9 @@ async function scanOnce(){
   if(!configured()){report(`Read ${listings.length} listings in ${shopName}, but the community database is not connected yet, so nothing was shared.`,'warn');return;}
   const {saved,seen,asks,sold}=await publish(fresh,loc,{title:shop.shopTitle||'',video:pending.frame});
   for(const l of fresh)st.sent.add(key(l));
+  // A shop this short is seen whole, so what was listed here before and is gone from it has left. Inferred, never a sale, and undone
+  // if the listing is read again.
+  if(shop.shopTitle&&listings.length<=COMPLETE_SHOP_ROWS&&!st.shop.uncertain){const cols=locationColumns(loc);closeMissingListings({world:loc.world,channel:loc.channel,map:cols.map,shopKey:shopKeyOf(loc.world,shop.shopTitle,cols.map),shopTitle:shop.shopTitle,items:publishable.filter(l=>l.state==='active').map(l=>({item:l.item,price:l.price,qty:l.qty}))}).catch(()=>{});}
   if(run===scanRun)drawOverlay(pending.frame,listings,new Set(publishable.filter(l=>st.sent.has(key(l))).map(listingKey)));
   st.settled=false;
   const dupes=fresh.length-saved.length-seen.length;
@@ -285,6 +319,25 @@ async function scanOnce(){
   if(asks.length)window.dispatchEvent(new CustomEvent('mesoswatch:observed',{detail:{world:loc.world}}));
  }catch(e){st.errors++;report('Scan problem: '+e.message+' Scanning continues.','error');}
  finally{st.busy=false;stats();dashboard();}
+}
+
+// The shop on screen against the market, row by row, as you browse. Read-only, and it needs no channel: a price check is useful before
+// anything is published. Market figures are cached for a minute, so walking through shops does not query for every row.
+let market={at:0,world:null,byName:new Map()};
+async function typicalPrices(world){
+ if(market.world!==world||Date.now()-market.at>6e4){const rows=await marketIndexWindow(world,7);market={at:Date.now(),world,byName:new Map(rows.map(r=>[r.name.toLowerCase(),r]))};}
+ return market.byName;
+}
+async function priceCheck(listings){
+ if(!configured())return;
+ const rows=listings.filter(l=>l.state==='active'),box=$('scan-check');
+ let prices=new Map();try{prices=await typicalPrices($('world').value||'');}catch{/* the rows still show, without a comparison */}
+ box.replaceChildren(...rows.map(l=>{
+  const m=prices.get(l.item.toLowerCase()),typical=m&&+m.listings>=MIN.typical?+m.ask_median:null,v=typical?vsTypical(l.price,typical):null,li=document.createElement('li');
+  li.append(Object.assign(document.createElement('span'),{textContent:l.item}),mesoAmt(fmt(l.price)),Object.assign(document.createElement('small'),{textContent:v?`${v.text} against the usual ${fmt(typical)}${v.unusual?' · check this price':''}`:`${INSUFFICIENT} to compare`}));
+  return li;
+ }));
+ $('scan-check-empty').hidden=rows.length>0;
 }
 
 // Crop the listing's sprite at native size, hash it, and offer it as the item's icon (it becomes official when two players agree).
@@ -316,7 +369,7 @@ function renderFeed(){
  const list=$('scan-feed');list.replaceChildren();
  $('scan-feed-empty').hidden=st.feed.length>0;
  for(const f of st.feed){const li=document.createElement('li');li.title=f.id;li.classList.toggle('sold',!!f.sold);
-  if(f.observationId){const report=document.createElement('a');report.href='#reports';report.textContent='Report #'+f.observationId;li.append(report);}
+  if(f.observationId){const report=document.createElement('button');report.type='button';report.className='link-button';report.textContent='Report';report.onclick=()=>window.dispatchEvent(new CustomEvent('mesoswatch:report',{detail:{observationId:f.observationId,label:[f.item,fmt(f.price)+' mesos',f.shop].filter(Boolean).join(' · ')}}));li.append(report);}
   const a=Object.assign(document.createElement('a'),{href:'#item/'+f.itemId,className:'item-link'});a.append(iconEl(f.catalogItem||{name:f.item},24),document.createTextNode(f.item));
   li.append(a,mesoAmt(f.price!=null?fmt(f.price):'—'));
   if(f.sold)li.append(Object.assign(document.createElement('span'),{className:'fm-badge sold',textContent:'SOLD'}));

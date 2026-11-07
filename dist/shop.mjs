@@ -1,7 +1,7 @@
 // Reads a player shop from full-frame OCR words (tsvWords): item-name rows above "1 for 24,679 mesos" rows, the shop's title,
 // the FM map when visible, and stats from a hovered item's tooltip.
-import {rowsOf} from './locate.mjs?v=autoselect-7';
-const PRICE=/^(\d{1,4})\s*f[o0]r\s*([\d][\d,.]*)\s*m[e3][s5][o0][s5]?[^A-Za-z0-9]*$/i;
+import {rowsOf} from './locate.mjs?v=depth-1';
+const PRICE=/^(\d{1,4})\s*[ft][o0]r\s*([\d][\d,.]*)\s*m[e3][s5][o0][s5]?[^A-Za-z0-9]*$/i;
 // In full-frame OCR the small "1 for" often comes out as "ar"/"or" or vanishes: such rows are kept as unconfirmed and re-read.
 const LOOSE=/^(?:[^\d\s]{1,3}\s+)?([\d][\d,.]{2,})\s*m[e3][s5][o0][s5]?[^A-Za-z0-9]*$/i;
 const MIN_CONF=70;
@@ -43,14 +43,9 @@ export function readShop(words){
    nameBox:{x:Math.round(name.x-h*.3),y:Math.round(name.y-h*.25),w:Math.round(name.w+h*.8),h:Math.round(name.h+h*.5)},
    priceBox:{x:Math.round(left),y:Math.round(line.y-h*.3),w:Math.round(line.x+line.w-left+h*.6),h:Math.round(line.h+h*.6)},box:{x:name.x,y:name.y,w:Math.max(name.w,line.x+line.w-name.x),h:line.y+line.h-name.y},icon:{x:Math.round(name.x-h*3.4),y:Math.round(name.y-h*.25),w:Math.round(h*2.9),h:Math.round(h*2.9)}});
  }
- if(!listings.length)return{listings,shopTitle:'',titleBox:null,map:'',channel:null,ownStore};
+ if(!listings.length)return{listings,shopTitle:'',titleBox:null,map:'',channel:null,ownStore,lines};
 
- // Title bar: the top line in the listing column, well above the first listing, that is not a button or a number.
- const first=listings.reduce((a,b)=>a.box.y<b.box.y?a:b),hh=first.box.h/2;
- const title=lines.filter(l=>l.y<first.box.y-hh*5&&first.box.y-l.y<hh*14&&l.x>first.box.x-hh*5&&l.x<first.box.x+hh*12&&l.conf>=40&&!BUTTONS.test(l.text.trim())&&/[A-Za-z]{2}/.test(l.text)&&!/^[\d,.\s]+$/.test(l.text)).sort((a,b)=>a.y-b.y)[0];
- const shopTitle=title?cleanName(title.text).slice(0,40):'';
- // Where the title was found, padded, so the scanner can re-read it from a smooth enlarged crop (full-frame OCR splits names).
- const titleBox=title?{x:Math.round(title.x-title.h*.6),y:Math.round(title.y-title.h*.4),w:Math.round(title.w+title.h*1.2),h:Math.round(title.h*1.8)}:null;
+ const first=listings.reduce((a,b)=>a.box.y<b.box.y?a:b),{shopTitle,titleBox}=titleAbove(lines,first.box);
 
  // Tooltip: a cluster of stat lines whose heading repeats one of the listed names (the item under the cursor).
  const statLines=lines.map(l=>({l,s:statLine(l.text)})).filter(x=>x.s);
@@ -67,7 +62,13 @@ export function readShop(words){
  // Minimap titles read "<Free Market> Free Market Entrance": keep the room name after the region tag.
  const map=mapLine?cleanName(mapLine.text.replace(/^.*[>\]]\s*(?=\S)/,'').replace(/^[<\[]\s*/,'')).slice(0,40):'';
  const ch=lines.map(l=>/\bch(?:annel)?\.?\s*(\d{1,2})\b/i.exec(l.text)).find(Boolean);
- return{listings,shopTitle,titleBox,map,channel:ch?+ch[1]:null,ownStore};
+ return{listings,shopTitle,titleBox,map,channel:ch?+ch[1]:null,ownStore,lines};
+}
+// Title bar: the top line in the listing column, well above the topmost listing, that is not a button or a number. With where it was
+// found, padded, so the scanner can re-read it from a smooth enlarged crop (full-frame OCR splits names).
+export function titleAbove(lines,top){
+ const hh=top.h/2,title=lines.filter(l=>l.y<top.y-hh*5&&top.y-l.y<hh*14&&l.x>top.x-hh*5&&l.x<top.x+hh*12&&l.conf>=40&&!BUTTONS.test(l.text.trim())&&/[A-Za-z]{2}/.test(l.text)&&!/^[\d,.\s]+$/.test(l.text)).sort((a,b)=>a.y-b.y)[0];
+ return{shopTitle:title?cleanName(title.text).slice(0,40):'',titleBox:title?{x:Math.round(title.x-title.h*.6),y:Math.round(title.y-title.h*.4),w:Math.round(title.w+title.h*1.2),h:Math.round(title.h*1.8)}:null};
 }
 
 export const readShopListings=words=>readShop(words).listings.filter(l=>l.certain).map(({item,price,qty})=>({item,price,qty}));
