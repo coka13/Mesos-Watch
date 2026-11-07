@@ -52,7 +52,7 @@ Only the text of its public pages was read: `/`, `/market`, `/ranking`, `/about`
 | Price alerts and target prices | Done | In-app, checked each minute while a tab is open. Nothing is sent while the site is closed |
 | Buy low, sell high | Done | After the 3% store fee, with its basis named. Misreads are not bargains |
 | Profit, ROI, break-even | Done | Filled from the item's own prices |
-| Live price check while shopping | Done | Each row of the open shop against the market. Needs no channel |
+| Live price check while shopping | Done | Shows the prices read from the open shop before channel verification. If the market database is connected, compares recognized items against seven-day asking prices |
 | Reporting a listing, admin review | Done | Reports, sale evidence and community items tested. Megaphone actions need the deployed payment functions |
 | Refreshing | Done | The index refreshes each minute. Supabase Realtime is wired, but not exercised by the browser tests |
 | Reference prices (NiaDB) | Done | Admin entry only, one linked figure at a time. Nothing is scraped |
@@ -73,7 +73,8 @@ Only the text of its public pages was read: `/`, `/market`, `/ranking`, `/about`
 | A visitor's shop window | Limited | No real capture exists. Tests use a real capture with the owner's buttons painted out |
 | A shop with every row sold | Partial | The second pass needs one readable row to find the list |
 | Store Watcher Auto Select | Partial | The balance reads. On small captures the store list can need manual selection, which is offered |
-| Your own store against typical prices | Partial | The scanner's live price check does this for other players' shops. Store Watcher's own list does not show it yet |
+| Your own store against typical prices | Limited | Store Watcher compares active rows with exact catalog names against the same world's seven-day asking median, when there are at least three listings. It shows the sample count and freshness. A connected market database is required for comparisons |
+| Local Store Watcher review | Done | Scan my store reads the selected item area before checking the account or database. Publication still requires a fresh location reading, a catalog match and a signed-in account |
 
 ### Site
 

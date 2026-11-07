@@ -50,8 +50,8 @@ await c.step('a shop is read, with sold rows told apart, and waits for its chann
  assert.ok(+(await text('scan-d-sold'))>=3,'rows seen sold: '+await text('scan-d-sold'));assert.ok(+(await text('scan-d-active'))>=1,'rows for sale: '+await text('scan-d-active'));
  assert.equal(await page.inputValue('#scan-room'),'8','the room comes from the minimap');
  assert.equal((await q(`select count(*)::int n from observations where shop_title not like 'Seed%'`)).rows[0].n,0,'nothing goes out without a channel');
- await page.waitForFunction(()=>document.getElementById('scan-check').textContent.includes('Sapphire Earrings'));
- assert.match(await text('scan-check'),/against the usual 9,500/,'a live price check needs no channel');
+ await until('scan-check','Typical asking price 9,500 mesos each');
+ assert.match(await text('scan-check'),/Sapphire Earrings/,'a live price check needs no channel');
  await shot('scanner-waiting');
 });
 await c.step('with the channel read from its grid, listings publish with their location',async()=>{
@@ -86,6 +86,20 @@ await c.step('Store Watcher still reads the balance, and offers the manual fallb
  assert.equal(await page.isDisabled('#start'),true,'Start still waits for every required step');
  assert.equal(await page.isDisabled('#select-storeItems'),false,'the manual selection is available');
  await shot('store-watcher');
+});
+await c.step('Store Watcher compares its own item with the market for the selected world',async()=>{
+ const name='Overall Armor DEX Scroll';
+ await q(`insert into items(name,game_id,verified,source,release_status,category) values($1,2040402,true,'catalog','released','use')`,[name]);
+ for(const [i,price] of [18000,20000,22000].entries())await mock.as(other.id,()=>mock.db.query(`insert into observations(kind,world,item_name,price,qty,shop_key,shop_title,map,channel,capture_source,location_type,room,location_source,location_confidence)values('ask','Windia',$1,$2,1,$3,$3,'Free Market 3',$4,'scanner','FM_ROOM',3,'AUTO',90)`,[name,price,'Seed scroll '+i,i+1]));
+ await page.evaluate(()=>localStorage.setItem('mw-fm-world','Windia'));
+ await page.reload();
+ await show('store-window');
+ await page.click('#connect');
+ await page.locator('#read').waitFor();
+ await page.click('#read',{timeout:120000});
+ await until('store-items-reading','Typical asking price 20,000 mesos each');
+ const card=await page.locator('#store-items-reading .sold-item').filter({hasText:name}).textContent();
+ assert.match(card,/FM Scanner.*3 listings/);
 });
 await c.step('no page errors',async()=>{assert.deepEqual(errors,[]);});
 await page.context().close();await browser.close();await server.close();

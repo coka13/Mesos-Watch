@@ -12,7 +12,7 @@ import {makeLocation,locationProblems,whereToFind,locationColumns} from './locat
 import {ocrImage,TEXT_PASSES} from './ocr-prep.mjs?v=prep-2';
 import {configured,reportObservations,reportSoldSightings,shareIcon,worlds,closeMissingListings,marketIndexWindow} from './api.mjs?v=depth-1';
 import {createShopMemory} from './shop-identity.mjs?v=1';
-import {MIN,vsTypical,INSUFFICIENT} from './price-source.mjs?v=1';
+import {MIN,vsTypical,INSUFFICIENT,sourceText} from './price-source.mjs?v=1';
 const $=id=>document.getElementById(id);
 const fmt=n=>Number(n).toLocaleString('en-US');
 const cap=()=>window.mesosCapture;
@@ -262,7 +262,7 @@ async function scanOnce(){
   if(pending&&!grid){report(channelPrompt,'warn');return;}
   if(pending)shop=pending.shop;
   else if(shop&&!shop.ownStore&&shop.listings.length)shop.shopTitle=shopMemory.resolve(locKey(currentLocation()),shop.shopTitle,shop.listings.filter(l=>l.state!=='uncertain').map(listingKey));
-  if(shop.ownStore){st.waiting=0;st.last=[];st.shop={title:'',active:0,sold:0,uncertain:0};if(run===scanRun)drawOverlay(frame,[],new Set());report('This is your own store (its Sold Items / Close Store buttons are visible), so it is not shared as an FM listing. Track it in My Store, or publish it under Player Stores.','warn');return;}
+  if(shop.ownStore){st.waiting=0;st.last=[];st.shop={title:'',active:0,sold:0,uncertain:0};priceCheck([]);if(run===scanRun)drawOverlay(frame,[],new Set());report('This is your own store (its Sold Items / Close Store buttons are visible), so it is not shared as an FM listing. Track it in My Store, or publish it under Player Stores.','warn');return;}
   const listings=shop.listings,count=k=>listings.filter(l=>l.state===k).length;
   st.shop={title:shop.shopTitle||'',active:count('active'),sold:count('sold'),uncertain:count('uncertain')};
   if(!pending)priceCheck(listings).catch(()=>{});
@@ -329,15 +329,35 @@ async function typicalPrices(world){
  return market.byName;
 }
 async function priceCheck(listings){
- if(!configured())return;
  const rows=listings.filter(l=>l.state==='active'),box=$('scan-check');
- let prices=new Map();try{prices=await typicalPrices($('world').value||'');}catch{/* the rows still show, without a comparison */}
+ const world=$('world').value||'',online=configured();
+ const details=[];
  box.replaceChildren(...rows.map(l=>{
-  const m=prices.get(l.item.toLowerCase()),typical=m&&+m.listings>=MIN.typical?+m.ask_median:null,v=typical?vsTypical(l.price,typical):null,li=document.createElement('li');
-  li.append(Object.assign(document.createElement('span'),{textContent:l.item}),mesoAmt(fmt(l.price)),Object.assign(document.createElement('small'),{textContent:v?`${v.text} against the usual ${fmt(typical)}${v.unusual?' · check this price':''}`:`${INSUFFICIENT} to compare`}));
+  const li=document.createElement('li'),detail=document.createElement('small');
+  detail.textContent=online?'Checking the market…':'Read from the shop · market comparison unavailable';
+  details.push({listing:l,detail});
+  li.append(Object.assign(document.createElement('span'),{textContent:l.item}),mesoAmt(fmt(l.price)),detail);
   return li;
  }));
  $('scan-check-empty').hidden=rows.length>0;
+ if(!online||!rows.length)return;
+ let prices;
+ try{prices=await typicalPrices(world);}catch{
+  for(const {detail} of details)detail.textContent='Market comparison unavailable';
+  return;
+ }
+ if(($('world').value||'')!==world)return;
+ for(const {listing,detail} of details){
+  const item=prices.get(listing.item.toLowerCase());
+  const typical=+item?.listings>=MIN.typical?+item.ask_median:null;
+  const comparison=vsTypical(listing.price,typical);
+  detail.textContent=`${INSUFFICIENT} to compare`;
+  if(comparison){
+   const source=sourceText({at:item.last_seen,n:+item.listings,window:'7 days'});
+   detail.textContent=`${comparison.text} · Typical asking price ${fmt(typical)} mesos each${comparison.unusual?' · check this price':''} · ${source.text}`;
+   detail.title=source.title;
+  }
+ }
 }
 
 // Crop the listing's sprite at native size, hash it, and offer it as the item's icon (it becomes official when two players agree).

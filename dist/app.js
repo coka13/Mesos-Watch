@@ -9,7 +9,8 @@ import {createSession,observeStore} from './store-session.mjs?v=ms-5';
 import {chooseSoldReading,chatVisitors,parsePriceList,majorityNumber,STORE_FEE_RATE} from './sold-items.mjs?v=ms-5';
 import {parseTotal} from './detection.mjs?v=reader-4';
 import {tsvWords,locateRegions,frameScale,coinScorer} from './locate.mjs?v=depth-1';
-import {reportObservations,configured as boardConfigured,matchNames,iconUrl} from './api.mjs?v=depth-1';
+import {reportObservations,configured as boardConfigured,matchNames,iconUrl,itemSummary} from './api.mjs?v=depth-1';
+import {sourceText,typicalAsk,vsTypical} from './price-source.mjs';
 import * as fm from './fm-location.mjs?v=depth-1';
 import {makeLocation,locationProblems,whereToFind} from './location.mjs?v=loc-1';
 import {needAccount,SignInNeeded,ownStores,saveStore,saveListing,storeListings} from './community-api.mjs';
@@ -170,6 +171,35 @@ const middle=reads=>reads.map(r=>r.confidence??0).sort((a,b)=>b-a)[Math.min(1,re
 function showCrop(id,image){const canvas=$(id);canvas.hidden=false;canvas.width=image.width;canvas.height=image.height;canvas.getContext('2d').drawImage(image,0,0);}
 
 const soldIconCache=new Map();
+const storePriceCache=new Map();
+async function compareStorePrices(world,rows){
+ const matches=await matchNames([...new Set(rows.map(({row})=>row.item))]);
+ const byName=new Map(matches.map(match=>[match.input,match]));
+ await Promise.all(rows.map(async({row,detail})=>{
+  const match=byName.get(row.item);
+  if(!match?.item_id||match.name.toLowerCase()!==row.item.toLowerCase()||!detail.isConnected)return;
+  const key=JSON.stringify([world,match.item_id]);
+  let entry=storePriceCache.get(key);
+  if(!entry||Date.now()-entry.at>=60000){
+   entry={at:Date.now(),summary:itemSummary(match.item_id,world)};
+   if(storePriceCache.size>=100)storePriceCache.delete(storePriceCache.keys().next().value);
+   storePriceCache.set(key,entry);
+  }
+  let summary;
+  try{summary=await entry.summary;}catch{
+   if(storePriceCache.get(key)===entry)storePriceCache.delete(key);
+   return;
+  }
+  if(!detail.isConnected||fmLoc().world!==world)return;
+  const typical=typicalAsk(summary);
+  if(!typical.ok){detail.textContent=typical.reason;return;}
+  const comparison=vsTypical(row.bundle/row.qty,typical.value);
+  if(!comparison)return;
+  const source=sourceText({at:summary.ask_last_seen,n:typical.n,window:'7 days'});
+  detail.textContent=`${comparison.text} · Typical asking price ${fmt(typical.value)} mesos each · ${source.text}`;
+  detail.title=source.title;
+ }));
+}
 function soldPicture(picture){return picture?.toDataURL('image/png')||null;}
 function attachItemIcon(card,name){
   const key=name.replace(/\.{2,}$/,'');
@@ -207,6 +237,8 @@ async function reading(){
  storeCanvas.width=storeFrame.width;storeCanvas.height=storeFrame.height;
  storeCanvas.getContext('2d').putImageData(storeFrame,0,0);
  const storeList=$('store-items-reading');storeList.replaceChildren();
+ const priceRows=[];
+ const storeWorld=fmLoc().world;
  if(!storeRows.length)storeList.textContent='No store items read. Check the selected store item area.';
  for(const row of storeRows){
   const card=document.createElement('div');card.className='sold-item';
@@ -214,6 +246,11 @@ async function reading(){
   name.textContent=row.item;
   detail.textContent=row.qty+' for '+fmt(row.bundle)+' mesos'+(row.sold?' · Sold':'');
   text.append(name,detail);card.append(text);storeList.append(card);
+  if(boardConfigured()&&storeWorld&&!row.sold&&row.qty>0&&row.bundle>0){
+   const marketDetail=document.createElement('small');
+   text.append(marketDetail);
+   priceRows.push({row,detail:marketDetail});
+  }
   const area=fm.storeIconArea(row,storeRows,storeFrame.width,storeFrame.height);
   const icon=document.createElement('canvas');icon.width=area.w;icon.height=area.h;
   icon.getContext('2d').drawImage(storeCanvas,area.x,area.y,area.w,area.h,0,0,area.w,area.h);
@@ -222,6 +259,7 @@ async function reading(){
   });
   card.prepend(image);
  }
+ if(priceRows.length)compareStorePrices(storeWorld,priceRows).catch(()=>{});
  const balance=await readBalance(w),visitors=await readChat(w);
   const sold=chooseSoldReading(...itemReads);lastReads.items=sold.records.length+' records · '+Math.round(sold.confidence)+'%';
   $('sales-total-card').hidden=true;
@@ -396,7 +434,7 @@ for(const id of ['fm-world','fm-channel','fm-room','fm-map','fm-character']){con
 $('fm-store-name').addEventListener('input',()=>{$('mystore-name').value=$('fm-store-name').value;$('mystore-name').dispatchEvent(new Event('change'));});
 function fmControls(){
  const loc=fmLoc(),idle=!!stream&&!fmBusy&&!checking&&!watching;
- $('fm-read-room').disabled=$('fm-read-channel').disabled=!idle;$('fm-read-store').disabled=!idle||!regions.chat;
+ $('fm-read-room').disabled=$('fm-read-channel').disabled=!idle;$('fm-read-store').disabled=!idle||!(regions.storeItems||regions.chat);
  $('fm-room-step').classList.toggle('done',minimapRead&&(loc.room>=1&&loc.room<=99||fmModel(loc).locationType==='NAMED_MAP'));
  $('fm-channel-step').classList.toggle('done',!!loc.world&&loc.channel>=1&&loc.channel<=40);
  const problems=locationProblems(fmModel(loc),{needWorld:true});
@@ -450,18 +488,13 @@ $('fm-read-channel').onclick=fmTask(async()=>{
 });
 // One scan of the store list: every row checked, then the certain ones published.
 async function fmScanStore(){
- if(!regions.chat)throw Error('Run Auto Select first (step 2) so your store window and its chat are found.');
- const loc=fmLoc(),problems=locationProblems(fmModel(loc),{needWorld:true});
- if(problems.length)throw Error('Nothing published yet. '+problems.join(' '));
- const W=video.videoWidth,H=video.videoHeight,area=fm.storeListArea(regions.chat,W,H),reads=[];fmStatus('Reading your store items…');
+ if(!(regions.storeItems||regions.chat))throw Error('Select the store item list or run Auto Select first.');
+ const W=video.videoWidth,H=video.videoHeight,area=regions.storeItems||fm.storeListArea(regions.chat,W,H),reads=[];
+ fmShow([],[]);
+ fmStatus('Reading your store items…');
  for(const o of fm.LIST_READS)reads.push((await readRect(area,o,'6')).tsv);
  const px=framePixels(),rows=fm.mergeStoreRows(reads.map((t,i)=>fm.parseStoreRows(fm.toSource(tsvWords(t),area,fm.LIST_READS[i].scale))),px);
  if(!rows.length)throw Error('No store items found left of your shop chat. Keep the store window fully visible and scan again.');
- // The store name is your Store name field; when that is empty, the store window's title bar.
- if(!$('mystore-name').value.trim()){const t=fm.storeTitleArea(regions.chat,W,H),title=fm.storeTitle(fm.toSource(tsvWords((await readRect(t,fm.TITLE_READ,'11')).tsv),t,fm.TITLE_READ.scale));if(title){$('mystore-name').value=title;$('mystore-name').dispatchEvent(new Event('change'));}}
- $('fm-store-name').value=$('mystore-name').value;
- const name=$('fm-store-name').value.trim(),character=$('fm-character').value.trim();
- if(name.length<2||character.length<2)throw Error('Nothing published yet. Enter your store name and character name, then scan again.');
  // Each row: sold or for sale by its look, and its "N for B mesos" re-read until two reads agree.
  const checked=[],skipped=[];fmStatus('Checking '+rows.length+' rows…');
  for(const r of rows){
@@ -472,6 +505,26 @@ async function fmScanStore(){
   if(!price){skipped.push({...r,why:'price unclear'});continue;}
   checked.push({...r,...price,sold:state==='sold'});
  }
+ fmShow(checked.map(r=>({...r,name:r.item})),skipped);
+ if(!checked.length)throw Error('No row was read with certainty. Keep the store window still and fully visible, then scan again.');
+ if(!boardConfigured()){
+  fmStatus('Read '+checked.length+' store rows locally. Publishing requires a connected market database.');
+  return;
+ }
+ if(!locationReady()){
+  fmStatus('Store rows read. Read the minimap, world and channel before publishing.');
+  return;
+ }
+ const loc=fmLoc();
+ // Use the title bar only when the chat is available as an anchor.
+ if(regions.chat&&!$('mystore-name').value.trim()){
+  const titleArea=fm.storeTitleArea(regions.chat,W,H);
+  const title=fm.storeTitle(fm.toSource(tsvWords((await readRect(titleArea,fm.TITLE_READ,'11')).tsv),titleArea,fm.TITLE_READ.scale));
+  if(title){$('mystore-name').value=title;$('mystore-name').dispatchEvent(new Event('change'));}
+ }
+ $('fm-store-name').value=$('mystore-name').value;
+ const name=$('fm-store-name').value.trim(),character=$('fm-character').value.trim();
+ if(name.length<2||character.length<2)throw Error('Store rows read. Enter your store and character names before publishing.');
  let matches;try{matches=await matchNames(checked.map(r=>r.item));}catch(e){throw Error('Nothing published: item names could not be checked ('+e.message+').');}
  const ready=[];
  for(const r of checked){const m=matches.find(x=>x.input===r.item);if(m?.item_id)ready.push({...r,item_id:m.item_id,name:m.name});else skipped.push({...r,why:'not identified in the catalog'});}

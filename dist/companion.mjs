@@ -20,7 +20,7 @@ const store=(key,value)=>{try{localStorage.setItem(key,JSON.stringify(value));re
 const validSession=s=>!!s&&Number.isFinite(s.startedAt)&&Array.isArray(s.minutes)&&Array.isArray(s.segments)&&Array.isArray(s.readings);
 const savedSessions=()=>{const list=load(SESSIONS,[]);return Array.isArray(list)?list.filter(validSession):[];};
 function savedQuests(){const q=load(QUESTS,null);return q&&typeof q.records==='object'&&q.records&&Array.isArray(q.recent)?q:null;}
-const st={enabled:false,session:null,history:savedSessions(),log:createQuestLog(savedQuests()),data:null,bar:null,last:null,outcome:null,misses:0,blind:0,stop:null,busy:false,chart:'map',savedAt:0,pip:null,
+const st={enabled:false,session:null,history:savedSessions(),log:createQuestLog(savedQuests()),data:null,bar:null,last:null,outcome:null,misses:0,blind:0,stop:null,busy:false,chart:null,savedAt:0,pip:null,
  place:{status:'unknown',map:null,thumb:null,at:0,busy:false},who:{need:true,busy:false,at:0,tries:0,names:[]},saveFailed:false};
 
 // A session left running when the page closed goes into the history.
@@ -197,9 +197,11 @@ function render(now){
 function renderChart(now){
  const list=st.session||st.history[0],box=$('cp-chart');
  if(!list){box.innerHTML=expChartSvg([],{width:Math.max(320,box.clientWidth||720)});return;}
- const live=!!st.session,at=live?now:list.endedAt,width=Math.max(320,box.clientWidth||720),key=[st.chart,Math.floor(core.activeMs(list,at)/2e4),list.gained,width].join('|');
+ const live=!!st.session,range=st.chart??(live?'map':'all');
+ const at=live?now:list.endedAt,width=Math.max(320,box.clientWidth||720),key=[list.startedAt,range,list.segments.length,Math.floor(core.activeMs(list,at)/2e4),list.gained,width].join('|');
  if(box.dataset.key===key)return;box.dataset.key=key;
- box.innerHTML=expChartSvg(core.series(list,at,st.chart==='map'&&!list.segments.length?'all':st.chart),{width,height:200});
+ for(const button of document.querySelectorAll('#cp-ranges button'))button.classList.toggle('active',button.dataset.range===String(range));
+ box.innerHTML=expChartSvg(core.series(list,at,range==='map'&&!list.segments.length?'all':range),{width,height:200});
 }
 const cells=(...values)=>values.map(v=>el('td',typeof v==='object'&&v?{className:v.className||'',textContent:v.text,title:v.title||''}:{textContent:v}));
 const num=(text,title)=>({className:'num',text,title});
