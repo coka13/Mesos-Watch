@@ -227,6 +227,8 @@ body>header,body>main,body>footer{min-width:0}
 
 /* ---- Themed empty states ---- */
 .price-feed li.empty:not(.error)::before,.admin-list li.empty:not(.error)::before,p.empty:not(.error)::before{content:"";display:inline-block;width:30px;height:24px;margin-right:8px;vertical-align:middle;background:url(sprites/slime.gif) center/contain no-repeat;image-rendering:pixelated}
+ul.price-feed:empty::after,ul.admin-list:empty::after{content:'Loading…';display:block;padding:12px 4px;font:400 12px var(--text);color:var(--muted)}
+.chart-box:empty::after{content:'Loading chart…';display:grid;place-items:center;min-height:140px;font:400 12px var(--text);color:var(--muted)}
 
 /* ---- Interaction feedback ---- */
 #trade-output.sparkle{animation:meso-sparkle .9s ease-out}

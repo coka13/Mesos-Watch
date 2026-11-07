@@ -25,6 +25,8 @@
 body{font-family:var(--text);font-weight:400;font-size:13px;color:var(--ink);background:linear-gradient(180deg,#85c5e6 0,#cfeaf0 34%,#f4f4cd 62%,#b3cf82 84%,#8eb271 100%) fixed}
 body:before{content:none}
 button,input,select,textarea{font-family:var(--text)}
+/* Base skin for the bare selects (market/sort/filter) that had no rule of their own; .world-pick and .watch-actions select stay more specific and win. */
+select{font:700 12px var(--display);color:var(--wood-dark);background:var(--cream-2);border:1px solid var(--cream-line);border-radius:var(--radius-sm);padding:6px 9px}
 h1,h2,h3,.brand,.section-head h2,.side-card>.eyebrow,.step{font-family:var(--display);font-weight:700}
 ::selection{background:var(--gold-lite);color:var(--wood-dark)}
 :focus-visible{outline:3px solid var(--gold);outline-offset:2px}
@@ -234,3 +236,5 @@ footer span:last-child{font:700 11px var(--display);color:var(--gold-lite);lette
 .where-find{white-space:nowrap}.where-find button{margin-left:6px;padding:1px 6px;font-size:11px}
 .listing-filters{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:6px 0}
 .listing-filters input{width:90px;margin:0}
+/* The plain "Sort" label was unstyled and stacked; give it the same inline-flex uppercase look as its .fm-field siblings. */
+.listing-filters>label:not(.fm-field){display:inline-flex;align-items:center;gap:6px;font:700 11px var(--display);color:var(--muted);text-transform:uppercase}

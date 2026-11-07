@@ -137,6 +137,10 @@ body>header,body[data-view="checker"]>header,body[data-view="checker"]:has(#home
 .site-actions #ad-slot .sponsor-open{flex:1 1 auto;width:auto;min-width:150px;border:1px dashed #a77a3d;background:#fffdf2;color:#6b471d;box-shadow:none;min-height:34px}
 .site-actions #ad-slot .sponsor-open:hover{background:#fff2d0;box-shadow:none}
 .site-actions #ad-content{flex:0 1 auto;max-width:200px}
+/* The mock sponsor copy is wrapped in .ad-test, which bypassed the compact selectors above and stretched the row to ~106px. */
+.site-actions #ad-content .ad-test{display:block;min-width:0}
+.site-actions #ad-content .ad-test img,.site-actions #ad-content .ad-test p,.site-actions #ad-content .ad-test small{display:none}
+.site-actions #ad-content .ad-test strong{display:block;font:400 12px/1.4 var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .google-ad-mock{box-sizing:border-box;display:flex;align-items:center;justify-content:center;gap:16px;min-width:0;padding:10px 16px;background:#ffffff70;border:1px dashed #9aab9b;border-radius:8px;color:#617264;font-family:Arial,sans-serif;text-shadow:none}
 .global-ad-mock{position:relative;z-index:1;align-self:center;width:min(var(--shell-width),calc(100% - 2 * var(--shell-gutter)));flex:0 0 48px;min-height:48px;margin:0 auto 8px}
 .mock-ad-label{font-size:9px;letter-spacing:1.3px;color:#718273}
@@ -239,6 +243,7 @@ main>.view .page-head{padding-bottom:10px}main>.view .page-head h1{font-size:28p
  .route-content .home-grid.three .price-feed{flex:1;min-height:0;max-height:none;overflow:auto}
  .route-content>.page-ad-mock{flex:0 0 42px}
  .route-content #public-stores{flex:1 1 0;min-height:0;max-height:none}
+ .route-content #public-stores:has(>li.empty:only-child){display:grid;place-items:center}
 }
 @media(max-width:850px){.route-tab-panel>.workspace,.route-content>.workspace{grid-template-columns:1fr}.route-tabs button{font-size:12px}.route-content .price-feed,.route-content .admin-list{max-height:260px}.scan-body .scan-stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
 
@@ -253,6 +258,7 @@ main>.view .page-head{padding-bottom:10px}main>.view .page-head h1{font-size:28p
 #watcher .steps{overflow-anchor:none}
 #watcher .metric{display:flex;align-items:center;justify-content:space-between;gap:12px}
 #watcher .metric strong{font-size:21px;line-height:1.2;text-align:right}
+#watcher .metric strong .text-val{font-size:15px;line-height:1.35}
 #watcher .metric>span{font-size:10px;line-height:1.4;max-width:110px}
 @media(min-width:981px) and (min-height:600px){
  .view[data-view="store"] .route-content{overflow:hidden}
