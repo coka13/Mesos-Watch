@@ -95,10 +95,11 @@ await c.step('Store Watcher compares its own item with the market for the select
  await page.reload();
  await show('store-window');
  await page.click('#connect');
- await page.locator('#read').waitFor();
- await page.click('#read',{timeout:120000});
- await until('store-items-reading','Typical asking price 20,000 mesos each');
- const card=await page.locator('#store-items-reading .sold-item').filter({hasText:name}).textContent();
+ await page.waitForFunction(()=>!document.getElementById('fm-read-store').disabled,null,{timeout:90000});
+ await page.click('.watcher-guide button[aria-controls="publish-step"]');
+ await page.click('#fm-read-store');
+ await until('fm-items','Typical asking price 20,000 mesos each');
+ const card=await page.locator('#fm-items li').filter({hasText:name}).textContent();
  assert.match(card,/FM Scanner.*3 listings/);
 });
 await c.step('no page errors',async()=>{assert.deepEqual(errors,[]);});

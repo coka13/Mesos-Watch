@@ -73,7 +73,7 @@ Only the text of its public pages was read: `/`, `/market`, `/ranking`, `/about`
 | A visitor's shop window | Limited | No real capture exists. Tests use a real capture with the owner's buttons painted out |
 | A shop with every row sold | Partial | The second pass needs one readable row to find the list |
 | Store Watcher Auto Select | Partial | The balance reads. On small captures the store list can need manual selection, which is offered |
-| Your own store against typical prices | Limited | Store Watcher compares active rows with exact catalog names against the same world's seven-day asking median, when there are at least three listings. It shows the sample count and freshness. A connected market database is required for comparisons |
+| Your own store against typical prices | Done | Store Watcher compares active rows with exact catalog names against the same world's seven-day asking median, when there are at least three listings. Source, sample count and freshness were verified in Chrome using a saved store capture and the local SQL harness |
 | Local Store Watcher review | Done | Scan my store reads the selected item area before checking the account or database. Publication still requires a fresh location reading, a catalog match and a signed-in account |
 
 ### Site

@@ -12,7 +12,7 @@ import {makeLocation,locationProblems,whereToFind,locationColumns} from './locat
 import {ocrImage,TEXT_PASSES} from './ocr-prep.mjs?v=prep-2';
 import {configured,reportObservations,reportSoldSightings,shareIcon,worlds,closeMissingListings,marketIndexWindow} from './api.mjs?v=depth-1';
 import {createShopMemory} from './shop-identity.mjs?v=1';
-import {MIN,vsTypical,INSUFFICIENT,sourceText} from './price-source.mjs?v=1';
+import {MIN,vsTypical,INSUFFICIENT,SOURCES,ago} from './price-source.mjs?v=1';
 const $=id=>document.getElementById(id);
 const fmt=n=>Number(n).toLocaleString('en-US');
 const cap=()=>window.mesosCapture;
@@ -353,9 +353,8 @@ async function priceCheck(listings){
   const comparison=vsTypical(listing.price,typical);
   detail.textContent=`${INSUFFICIENT} to compare`;
   if(comparison){
-   const source=sourceText({at:item.last_seen,n:+item.listings,window:'7 days'});
-   detail.textContent=`${comparison.text} · Typical asking price ${fmt(typical)} mesos each${comparison.unusual?' · check this price':''} · ${source.text}`;
-   detail.title=source.title;
+   const activity=item.last_seen?` · Last item activity ${ago(item.last_seen)}`:'';
+   detail.textContent=`${comparison.text} · Typical asking price ${fmt(typical)} mesos each${comparison.unusual?' · check this price':''} · ${SOURCES.scanner.short} · ${fmt(+item.listings)} listings in 7 days${activity}`;
   }
  }
 }

@@ -547,9 +547,20 @@ async function fmScanStore(){
 // What the last scan found: published rows with their status, skipped rows with the reason. Read-only.
 function fmShow(ready,skipped){
  const badge=(cls,text)=>Object.assign(document.createElement('span'),{className:'fm-badge'+cls,textContent:text});
- $('fm-items').replaceChildren(...ready.map(r=>{const li=document.createElement('li');li.append(badge(r.sold?' sold':'',r.sold?'Sold':'For sale'),document.createTextNode(r.name+(r.qty>1?' ×'+r.qty:'')),mesoAmt(fmt(r.price)+(r.qty>1?' each':''),13));return li;}),
+ const priceRows=[],world=fmLoc().world;
+ $('fm-items').replaceChildren(...ready.map(row=>{
+  const li=document.createElement('li');
+  li.append(badge(row.sold?' sold':'',row.sold?'Sold':'For sale'),document.createTextNode(row.name+(row.qty>1?' ×'+row.qty:'')),mesoAmt(fmt(row.price)+(row.qty>1?' each':''),13));
+  if(boardConfigured()&&world&&!row.sold){
+   const detail=document.createElement('small');
+   li.append(detail);
+   priceRows.push({row,detail});
+  }
+  return li;
+ }),
   ...skipped.map(r=>{const li=document.createElement('li');li.className='muted';li.append(badge(' skipped','Skipped'),document.createTextNode(r.item),Object.assign(document.createElement('small'),{textContent:r.why}));return li;}));
  $('fm-items').hidden=!(ready.length||skipped.length);
+ if(priceRows.length)compareStorePrices(world,priceRows).catch(()=>{});
 }
 $('fm-read-store').onclick=fmTask(fmScanStore);
 // A recorded sale greys out its row in your store: once published, the list is scanned again so it shows as sold.
