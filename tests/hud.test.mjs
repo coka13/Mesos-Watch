@@ -15,6 +15,8 @@ assert.deepEqual(parseExp('93,965 76,54%'),{exp:93965,pct:76.54,used:9});
 assert.deepEqual(parseExp('49 732 4051%',.405),{exp:49732,pct:40.51,used:9},'separators lost');
 assert.deepEqual(parseExp('49,732 405114',.41),{exp:49732,pct:40.51,used:9},'separator lost, percent sign broken');
 assert.deepEqual(parseExp('965 7,54%',.075),{exp:965,pct:7.54,used:6},'a low percentage has one whole digit');
+assert.deepEqual(parseExp('00,321 00,2674',.003),{exp:321,pct:.26,used:9},'the gap settles where the amount ends, not the digit scan');
+assert.deepEqual(parseExp('321 0,2674',.003),{exp:321,pct:.26,used:6},'a broken percent sign after a clean split');
 assert.deepEqual(parseExp('1,234,567 100,00%'),{exp:1234567,pct:100,used:12});
 assert.equal(parseExp('49 732 4051%'),null,'without the gauge an unclear line is no reading');
 assert.equal(parseExp('garbage',.5),null);

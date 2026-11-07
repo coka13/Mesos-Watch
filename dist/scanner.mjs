@@ -325,7 +325,7 @@ function renderFeed(){
 }
 
 function schedule(){clearTimeout(st.timer);if(st.on)st.timer=setTimeout(async()=>{await scanOnce();schedule();},Number($('scan-interval').value)*1000);}
-function setOn(on){scanRun++;st.pending=null;st.waiting=0;st.verifiedChannel=null;st.on=on;st.last=[];st.prevThumb=null;controls();if(on){channelPromptShown=false;scanStatus();scanOnce().then(schedule);}else{clearTimeout(st.timer);channelDialog.close();status('Scanning stopped.');}}
+function setOn(on){cap()?.claim?.('scanner',on);scanRun++;st.pending=null;st.waiting=0;st.verifiedChannel=null;st.on=on;st.last=[];st.prevThumb=null;controls();if(on){channelPromptShown=false;scanStatus();scanOnce().then(schedule);}else{clearTimeout(st.timer);channelDialog.close();status('Scanning stopped.');}}
 
 $('scan-connect').onclick=async()=>{if(!cap())return status('The page is still loading. Try again in a moment.','error');const button=$('scan-connect');button.disabled=true;
  try{const error=await cap().connect();if(error)status(error,'error');}

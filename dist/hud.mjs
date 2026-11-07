@@ -35,9 +35,10 @@ function column(px,x,w,y,test){
 }
 
 // The bar sits along the bottom of the game. HP and MP are side by side on one line; EXP follows MP, a little longer. Their left
-// edges and spacing fix the rest of the bar, however empty the gauges are. Returns null when no bar is seen.
-export function findStatusBar(px){
- const {width:W,height:H}=px,y0=Math.floor(H*.72),seen=new Set();let best=null;
+// edges and spacing fix the rest of the bar, however empty the gauges are. Returns null when no bar is seen. `from` is the share of
+// the height to start at: 0 when px is already just the bottom of the game.
+export function findStatusBar(px,from=.72){
+ const {width:W,height:H}=px,y0=Math.floor(H*from),seen=new Set();let best=null;
  for(let y=y0;y<H;y+=2){
   for(const hp of runs(px,y,0,W,hpFill,2)){
    const key=hp.x+':'+hp.w;if(hp.w<8||seen.has(key))continue;seen.add(key);
@@ -177,6 +178,9 @@ export function parseExp(text,fill=null){
  const t=String(text||'').trim(),m=/^(\d{1,3}(?:,\d{3})*) (\d{1,3}),(\d{2})%$/.exec(t);
  if(m)return plausibleExp(num(m[1]),+(m[2]+'.'+m[3]),t.replace(/[ ,%]/g,'').length);
  if(fill===null)return null;
+ // The gap and the decimal separator survived, and only the percent sign is damaged: they settle where the amount ends.
+ const gap=t.lastIndexOf(' '),split=gap>0&&/^[\d, ]+$/.test(t.slice(0,gap))?/^(\d{1,3}),(\d{2})/.exec(t.slice(gap+1)):null;
+ if(split){const head=t.slice(0,gap).replace(/[ ,]/g,''),pct=+(split[1]+'.'+split[2]);if(fillAgrees(pct,fill))return plausibleExp(+head,pct,head.length+split[1].length+2);}
  const s=t.replace(/[ ,]/g,''),need=(fill>=.98?3:fill>=.08?2:1)+2;
  for(let i=s.length-need;i>=1&&s.length-i-need<=4;i--){
   const head=s.slice(0,i),tail=s.slice(i,i+need);if(!/^\d+$/.test(head)||!/^\d+$/.test(tail))continue;

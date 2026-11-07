@@ -29,17 +29,20 @@ const stageIndex=new Map(ROUTES.flatMap(route=>route.stages.map(([map],index)=>[
 export const findStage=mapName=>stageIndex.get(key(mapName))||null;
 
 // A read of the minimap's map line, snapped to the game's map names. The list is closed, so OCR noise can be corrected, and a long
-// name cut off by the minimap's width still matches on what is visible. Too far from every name is no reading.
+// name that lost its start or end still matches on what is left. Two different names fitting equally well is no reading: "Patience
+// <Step 1>" could be either forest, and quest progress must not guess. Too far from every name is no reading either.
+// Characters OCR swaps in the game's small font are folded on both sides, so "81 <Area 2>" still finds B1.
+const fold=s=>key(s).replaceAll('8','b').replaceAll('0','o').replaceAll('5','s').replace(/[il|]/g,'1');
 export function closestMap(text,names,street=''){
- const t=key(text);if(t.length<3)return null;
- const streetKey=key(street);let best=null,dist=Infinity;
+ const t=fold(text);if(t.length<3)return null;
+ const streetKey=key(street);let best=null,dist=Infinity,tied=false;
  for(const m of names){
-  const n=key(m.name),cut=t.length<n.length?n.slice(0,t.length):n,d=Math.min(editDistance(t,n),editDistance(t,cut)+1);
+  const n=fold(m.name),short=t.length<n.length,d=Math.min(editDistance(t,n),short?editDistance(t,n.slice(0,t.length))+1:Infinity,short?editDistance(t,n.slice(-t.length))+1:Infinity);
   // Five names repeat on different streets: the street line settles those.
   const score=d-(streetKey&&editDistance(streetKey,key(m.street))<=2?.5:0);
-  if(score<dist){dist=score;best=m;}
+  if(score<dist){dist=score;best=m;tied=false;}else if(score===dist&&n!==fold(best.name))tied=true;
  }
- return best&&Math.ceil(dist)<=Math.max(1,Math.floor(t.length/5))?best:null;
+ return best&&!tied&&Math.ceil(dist)<=Math.max(1,Math.floor(t.length/5))?best:null;
 }
 
 export function createQuestLog(saved){return{run:null,records:saved?.records||{},recent:saved?.recent||[]};}

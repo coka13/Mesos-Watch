@@ -5,7 +5,7 @@ import {show,worldChanged,iconEl} from './checker.mjs?v=ms-8';
 const $=id=>document.getElementById(id);
 const el=(tag,props={},...kids)=>{const e=Object.assign(document.createElement(tag),props);e.append(...kids.filter(k=>k!=null&&k!==false));return e;};
 const money=c=>'$'+(c/100).toFixed(2);
-const VIEWS=['checker','trends','scanner','history','megaphones','store','settings','stores'];
+const VIEWS=['checker','trends','scanner','history','megaphones','store','settings','stores','companion'];
 const LEGACY={watcher:'store','sale-activity':'store',support:'store',discord:'store',guide:'settings',prices:'checker',item:'checker'};
 
 // ---- Router ----

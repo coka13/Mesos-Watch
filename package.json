@@ -10,12 +10,14 @@
     "preview": "node scripts/preview.mjs",
     "verify": "node scripts/verify.mjs",
     "build-classic-data": "node scripts/build-classic-data.mjs",
-    "build-hud-glyphs": "node scripts/make-hud-glyphs.mjs"
+    "build-hud-glyphs": "node scripts/make-hud-glyphs.mjs",
+    "test:e2e": "node tests/e2e/companion.e2e.mjs chrome && node tests/e2e/companion.e2e.mjs msedge"
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.2.17",
     "jimp": "^1.6.1",
     "pg": "^8.23.1",
+    "playwright-core": "^1.49.1",
     "tesseract.js": "^6.0.1"
   }
 }

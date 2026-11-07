@@ -100,7 +100,10 @@ $('test').onclick=async()=>{if(testing||busy)return;testing=true;controls();try{
  catch(e){discordReady=false;status('Discord test failed: '+e.message,true);}finally{testing=false;controls();}};
 function stop(message='Watching stopped. Restart to establish a fresh baseline.') {watching=false;clearTimeout(timer);timer=null;$('badge').classList.remove('live');$('badge').replaceChildren(Object.assign(document.createElement('span'),{className:'dot'}),document.createTextNode(' Not watching'));controls();status(message);}
 $('stop').onclick=()=>stop();
+// A tool that does not need the store found (the Companion) connects quietly; the store is then found when its page is opened.
+let quietConnect=false;
 $('connect').onclick=async()=>{
+ const quiet=quietConnect;quietConnect=false;
  try{
   if(!navigator.mediaDevices?.getDisplayMedia)throw Error('Screen sharing isn’t available here. Open this page in desktop Chrome or Edge.');
   if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}
@@ -108,18 +111,12 @@ $('connect').onclick=async()=>{
   video.srcObject=stream;
   await video.play();
   minimapRead=false;channelRead=false;regions={};mode=null;
-  stream.getVideoTracks()[0].addEventListener('ended',()=>{
-   stop('Game sharing ended. Reconnect your window to continue.');
-   stream=null;video.srcObject=null;regions={};
-   $('preview').hidden=true;$('capture-empty').hidden=false;
-   controls();
-   window.dispatchEvent(new Event('mesoswatch:capture-ended'));
-  });
+  stream.getVideoTracks()[0].addEventListener('ended',captureEnded);
   $('preview').hidden=false;$('capture-empty').hidden=true;
   $('source-note').textContent='Window connected';
   window.dispatchEvent(new Event('mesoswatch:capture-started'));
   cancelAnimationFrame(frame);controls();draw();
-  await autoDetect();
+  if(!quiet)await autoDetect();
  }catch(e){
   if(stream){
    stream.getTracks().forEach(t=>t.stop());
@@ -132,6 +129,15 @@ $('connect').onclick=async()=>{
   return message;
  }
 };
+// The window stopped being shared, by the browser's own Stop button or by release(). Nothing keeps the capture alive after this.
+function captureEnded(){
+ if(!stream)return;
+ stop('Game sharing ended. Reconnect your window to continue.');
+ stream.getTracks().forEach(t=>t.stop());stream=null;video.srcObject=null;regions={};
+ $('preview').hidden=true;$('capture-empty').hidden=false;
+ controls();
+ window.dispatchEvent(new Event('mesoswatch:capture-ended'));
+}
 function draw(){if(!stream)return;const w=video.videoWidth,h=video.videoHeight;if(w&&h&&document.body.dataset.view==='store'&&!document.hidden&&$('capture-details').open){if(preview.width!==w)preview.width=w;if(preview.height!==h)preview.height=h;ctx.drawImage(video,0,0);for(const [name,r]of Object.entries(regions)){if(typeof r!=='object'||!Number.isFinite(r?.x))continue;if(name==='sale'&&regions.items&&['x','y','w','h'].every(k=>r[k]===regions.items[k]))continue;ctx.strokeStyle=name==='chat'?'#c58be5':name==='sale'?'#e58a81':name==='balance'?'#7ba952':name==='total'?'#e8a53b':'#6aa8d1';ctx.lineWidth=Math.max(2,w/400);ctx.strokeRect(r.x,r.y,r.w,r.h);ctx.fillStyle=ctx.strokeStyle;ctx.font=`${Math.max(12,w/100)}px sans-serif`;if(typeof r!=='object'||!Number.isFinite(r?.x))continue;ctx.fillText((name==='chat'?'SHOP CHAT':name==='sale'?'SALE SNAPSHOT':name==='balance'?'MY MESOS':name==='storeItems'?'STORE ITEMS':name==='total'?'TOTAL':'SOLD ITEMS')+(debugOverlay?` ${r.x},${r.y} ${r.w}×${r.h}`+(lastReads[name]?' · '+lastReads[name]:''):''),r.x+4,Math.max(15,r.y-5));}if(drag){ctx.strokeStyle='#fff';ctx.lineWidth=3;ctx.strokeRect(drag.x,drag.y,drag.endX-drag.x,drag.endY-drag.y);}}frame=requestAnimationFrame(draw);}
 function point(e){const b=preview.getBoundingClientRect();return sourcePoint({x:e.clientX,y:e.clientY},{x:b.left,y:b.top,width:b.width,height:b.height},{width:preview.width,height:preview.height});}
 function selectRegion(name){
@@ -349,8 +355,12 @@ function regionSig(){const r=regions.sale||regions.total;if(!r||!video.videoWidt
 function sigDiff(a,b){if(!a||!b)return 0;let t=0;for(let i=0;i<a.length;i++)t+=Math.abs(a[i]-b[i]);return t/a.length;}
 
 // Shared capture for the Live FM Scanner: one window share and one OCR engine, taken in turns.
-window.mesosCapture={video,get stream(){return stream;},connect:()=>$('connect').onclick(),
+// Other pages use the same shared window. claim() marks a tool as reading it; release() ends sharing only when nobody else is.
+const claims=new Set();
+window.mesosCapture={video,get stream(){return stream;},connect(quiet=false){quietConnect=quiet;return $('connect').onclick();},claim(tool,on){if(on)claims.add(tool);else claims.delete(tool);},
+ release(){if(!stream||watching||claims.size)return false;captureEnded();return true;},
  async withOCR(fn){const t0=Date.now();while(busy||checking){if(Date.now()-t0>30000)throw Error('The OCR engine is busy with your store. Try again shortly.');await new Promise(r=>setTimeout(r,250));}busy=true;controls();try{return await fn(await getWorker());}finally{busy=false;controls();}}};
+window.addEventListener('mesoswatch:view',e=>{if(e.detail.view==='store'&&stream&&!storeRegionsReady(regions)&&!busy&&!checking&&!watching)autoDetect();});
 window.dispatchEvent(new Event('mesoswatch:capture-ready'));
 
 // Personal sales history survives reloads (this browser only).

@@ -131,7 +131,7 @@ export function sessionRow(s,now){
  return{id:s.id,startedAt:s.startedAt,ms:f.active,gained:s.gained,perMin:f.average,pctPerMin:f.pctPerMin,readings:s.readingsCount,levelUps:s.levelUps,job:s.job,level:s.level};
 }
 // What a stored session keeps: the working fields of a live one are not worth keeping.
-export function archive(s){const {pending,conflict,vital,recent,...rest}=s;return{...rest,readings:rest.readings.slice(-MAX_READINGS)};}
+export function archive(s){const {pending,conflict,vital,...rest}=s;return{...rest,recent:[],readings:rest.readings.slice(-MAX_READINGS)};}
 export function formatDuration(ms){
  if(ms===null||ms===undefined||!Number.isFinite(ms))return'—';
  const t=Math.max(0,Math.round(ms/1000)),h=Math.floor(t/3600),m=Math.floor(t/60)%60,s=t%60;

@@ -86,3 +86,5 @@ html[data-theme="dark"] button:disabled :is(span,strong,small,b){color:inherit}
 .theme-switch[aria-checked="true"] .theme-switch-knob{transform:translateX(20px);background:radial-gradient(circle at 65% 35%,#26365c 0 38%,transparent 40%),radial-gradient(circle at 40% 40%,#fdf6dc,#d9d2b8);border-color:#8a8370;box-shadow:0 0 6px rgba(220,226,255,.6)}
 .world-bar .theme-switch:focus-visible{outline:2px solid var(--gold);outline-offset:3px;border-radius:9px}
 @media(max-width:600px){.theme-switch-label{display:none}}
+html[data-theme="dark"] .exp-chart{--exp-bar:#bd7a1c}
+html[data-theme="dark"] .exp-col:hover .exp-hit{fill:rgba(255,255,255,.07)}

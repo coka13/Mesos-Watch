@@ -81,10 +81,14 @@ assert.equal(data.source.license,'CC BY 4.0');assert.ok(data.source.changes);
 const near=(t,s)=>closestMap(t,data.maps,s)?.name;
 assert.equal(near('Henesys'),'Henesys');assert.equal(near('Henesvs'),'Henesys','one wrong letter');
 assert.equal(near('The Forest of Patience <Step 1>'),'The Forest of Patience <Step 1>');
-assert.equal(near('The Forest of Patience <Step'),'The Forest of Patience <Step 1>','cut off by the minimap');
+assert.equal(near('The Forest of Patience <Step'),undefined,'cut off before the step: any of five, so no guess');
+assert.equal(near('Kerning City Self-Defence Item'),'Kerning City Self-Defence Item Store','cut off by the minimap, still unique');
 assert.equal(near('The Deep Forest of Patience <Step 3>'),'The Deep Forest of Patience <Step 3>','not the shorter forest');
 assert.equal(near('1st Accompaniment <Last Stage>'),'1st Accompaniment <Last Stage>');
 assert.equal(near('Free Market <8>'),'Free Market <8>');
+assert.equal(near('Deep Forest of Patience <Step 3>'),'The Deep Forest of Patience <Step 3>','the start of a long name lost');
+assert.equal(near('Patience <Step 1>'),undefined,'either forest: no guess');
+assert.equal(near('of Patience <Step 7>'),'The Deep Forest of Patience <Step 7>','only one forest has a step 7');
 assert.equal(near('xqzvb'),undefined,'noise is no map');assert.equal(near(''),undefined);
 assert.equal(closestMap('Shortcut',data.maps,'Hidden Street')?.street,'Hidden Street');
 

@@ -35,8 +35,9 @@ export function roomLine(px,corner){
  const panel=runs(r=>r.b).sort((p,q)=>(q.y1-q.y0)-(p.y1-p.y0))[0];
  if(!panel||panel.y1-panel.y0<15)return null;
  const band=runs(r=>r.b&&r.w>=2&&r.y>=panel.y0&&r.y<=panel.y1).filter(b=>b.y1-b.y0>=3).at(-1);if(!band)return null;
- const h=band.y1-band.y0+1,pad=Math.round(h*.7);
- return{h,crop:clampRect({x:corner.x+blue.x+blue.w*.28,y:corner.y+band.y0-pad,w:blue.w*.72+2,h:h+2*pad},px.width,px.height)};
+ // The map icon at the panel's left is as wide as about one and a quarter panel heights, whatever the width of the name beside it.
+ const h=band.y1-band.y0+1,pad=Math.round(h*.7),icon=Math.min(blue.w*.28,(panel.y1-panel.y0+1)*1.25);
+ return{h,crop:clampRect({x:corner.x+blue.x+icon,y:corner.y+band.y0-pad,w:blue.w-icon+2,h:h+2*pad},px.width,px.height)};
 }
 // Reads of that line, scaled so the text is as tall as in the reference screenshot (8px line read at 4-6x).
 export const roomLineReads=h=>ROOM_READS.map(o=>({...o,scale:Math.max(1,Math.round(o.scale*9.5/h))}));
