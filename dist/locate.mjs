@@ -52,6 +52,36 @@ const CHAT_MESSAGE=l=>/\b[hn]a[sgz]\b/i.test(l.text)&&/ent|nt[ae]r|r[oa]{1,2}m|\
 const isWhite=({data,width},x,y)=>{const p=(Math.round(y)*width+Math.round(x))*4;return data[p]>248&&data[p+1]>248&&data[p+2]>248;};  // window frames are near-white (~245)
 function whiteShare(px,x0,y0,x1,y1){let n=0,t=0;const sx=x1>x0?2:1,sy=y1>y0?2:1;for(let y=y0;y<=y1;y+=sy)for(let x=x0;x<=x1;x+=sx){t++;if(isWhite(px,x,y))n++;}return t?n/t:0;}
 function extend(start,step,limit,inside,gap){let edge=start,miss=0;for(let v=start;step>0?v<=limit:v>=limit;v+=step){if(inside(v)){edge=v;miss=0;}else if(++miss>gap)break;}return edge;}
+// Find the drawn blue-gray item table around an OCR anchor, including an empty list.
+function findItemTable(px,anchor,ui){
+ const steel=(x,y)=>{
+  if(x<0||y<0||x>=px.width||y>=px.height)return false;
+  const p=(Math.round(y)*px.width+Math.round(x))*4;
+  const [r,g,b]=[px.data[p],px.data[p+1],px.data[p+2]];
+  return r>=170&&r<=235&&g>=r&&b>=g&&b-r>=5&&b-r<=40;
+ };
+ const gap=Math.max(2,Math.round(3*ui));
+ const x=Math.round(anchor.x+12*ui);
+ let best=null;
+ for(let offset=3;offset<=35;offset+=3){
+  const y=Math.round(anchor.y+anchor.h+offset*ui);
+  if(!steel(x,y))continue;
+  const left=extend(x,-1,0,v=>steel(v,y),gap);
+  const right=extend(x,1,px.width-1,v=>steel(v,y),gap);
+  if(right-left<70*ui||right-left>350*ui)continue;
+  if(!best||right-left>best.right-best.left)best={left,right,y};
+ }
+ if(!best)return null;
+ const {left,right,y}=best;
+ const row=v=>{
+  let matched=0;
+  for(let step=1;step<20;step++)if(steel(left+(right-left)*step/20,v))matched++;
+  return matched>=10;
+ };
+ const top=extend(y,-1,0,row,15*ui),bottom=extend(y,1,px.height-1,row,15*ui);
+ if(bottom-top<60*ui||bottom-top>450*ui)return null;
+ return{x:left,y:top,w:right-left+1,h:bottom-top+1};
+}
 // The shop chat: the white message area found from the left-aligned "has entered / has left" lines, plus the input line below it.
 function findChat(px,lines,s,ui,limitX){
  const msgs=lines.filter(l=>CHAT_MESSAGE(l)&&l.x+l.w<limitX);if(msgs.length<3)return null;
@@ -107,17 +137,18 @@ export function locateRegions(words,width,height,scale=1,coinScore=()=>0,pixels=
   const column=l=>l.x>=left-4*scale&&l.x<totalLabel.x+60*scale&&l.y<totalLabel.y;
   const buyers=lines.filter(l=>column(l)&&/^(buyer|number\s*purchased)\b/i.test(l.text)).sort((a,b)=>a.y-b.y);
   const title=lines.find(l=>/sold\s*[il]tems/i.test(l.text)&&l.y<totalLabel.y&&l.x<totalLabel.x+260*scale&&l.x+l.w>left);
-  const entryH=totalLabel.h*4.8;
   let listTop=null;
   if(buyers.length){const first=buyers[0];const name=lines.filter(l=>column(l)&&l.y<first.y&&first.y-l.y<first.h*2.4).sort((a,b)=>b.y-a.y)[0];listTop=(name||first).y-4*scale;}
   else if(title)listTop=title.y+title.h+5*scale;
-  else listTop=Math.max(0,totalLabel.y-entryH*2);  // no sales yet: an estimate, refreshed when the window changes
-  const inList=lines.filter(l=>column(l)&&l.y>=listTop&&l.y<totalLabel.y);
-  const right=Math.max(totalLabel.x+totalLabel.w,receivedLabel?receivedLabel.x+receivedLabel.w:0,...inList.map(l=>l.x+l.w))+12*scale;
-  const bottom=Math.max(totalLabel.y+totalLabel.h,...nums.map(n=>n.y+n.h))+8*scale;
-  if(totalLabel.y-listTop>15*scale){result.items=rect({x:left+4*scale,y:listTop,w:right-left-8*scale,h:totalLabel.y-listTop-4*scale});result.itemsEstimated=!buyers.length&&!title;}
-  shop={x:left,y:Math.min(listTop,title?title.y-6*scale:listTop)-4*scale,w:right-left};shop.h=bottom-shop.y;
-  result.sale=rect(shop);
+  // Empty panels have no item anchors. Their list can be above or below the totals.
+  if(listTop!==null){
+   const inList=lines.filter(l=>column(l)&&l.y>=listTop&&l.y<totalLabel.y);
+   const right=Math.max(totalLabel.x+totalLabel.w,receivedLabel?receivedLabel.x+receivedLabel.w:0,...inList.map(l=>l.x+l.w))+12*scale;
+   const bottom=Math.max(totalLabel.y+totalLabel.h,...nums.map(n=>n.y+n.h))+8*scale;
+   if(totalLabel.y-listTop>15*scale){result.items=rect({x:left+4*scale,y:listTop,w:right-left-8*scale,h:totalLabel.y-listTop-4*scale});result.itemsEstimated=!buyers.length&&!title;}
+   shop={x:left,y:Math.min(listTop,title?title.y-6*scale:listTop)-4*scale,w:right-left};shop.h=bottom-shop.y;
+   result.sale=rect(shop);
+  }
  }
  // Some Classic shop layouts have a scrolling Sold Items panel with no cumulative Sales total.
  // Locate repeated Buyer / Number purchased records independently; never substitute the personal balance for Sales.
@@ -140,6 +171,33 @@ export function locateRegions(words,width,height,scale=1,coinScore=()=>0,pixels=
     result.items={...rect(panel),text:rect(inset(panel,SOLD_WINDOW.text))};
     result.sale=rect(panel);result.mode='sold-items';shop=panel;
    }
+  }
+ }
+ if(!result.items){
+  const heights=lines.filter(line=>CHAT_MESSAGE(line)).map(line=>line.h).sort((a,b)=>a-b);
+  if(heights.length>=3)ui=heights[heights.length>>1]/11;
+ }
+ // The totals identify the Sold Items window, but are not required sale evidence.
+ if(!result.items&&pixels&&totalLabel){
+  const table=findItemTable(pixels,totalLabel,ui);
+  if(table){
+   const panel={x:Math.max(0,table.x-36*ui),y:table.y,w:table.w+Math.min(table.x,36*ui),h:table.h};
+   result.items={...rect(panel),text:rect(table)};result.sale=rect(panel);shop=panel;
+  }
+ }
+ if(result.items&&pixels)result.mode='sold-items';
+ let personalField=null;
+ const chatArea=pixels&&findChat(pixels,lines,scale,ui,shop?.x??width);
+ if(chatArea){
+  result.chat={...rect({...chatArea,h:chatArea.bottom-chatArea.y+1}),text:rect(chatArea)};
+  const field=findField(pixels,chatArea,ui);
+  if(field){personalField=field;result.balance=rect(field);}
+ }
+ if(pixels){
+  const prices=lines.filter(line=>/^\d+\s*for\s*[\d,]+\s*mesos\b/i.test(line.text)&&(!chatArea||line.x<chatArea.x));
+  for(const price of prices){
+   const table=findItemTable(pixels,price,ui);
+   if(table){result.storeItems=rect(table);break;}
   }
  }
  const inventory=lines.find(l=>/\binventory\b/i.test(l.text));
