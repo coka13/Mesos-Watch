@@ -571,3 +571,43 @@ span.insufficient{font-size:12px;white-space:nowrap}
 @media(max-width:760px){.cp-kpis,.cp-rates{grid-template-columns:1fr 1fr}.cp-kpis .kpi:first-child{grid-column:span 2}.cp-rates>div:first-child{grid-column:span 2}}
 .cp-main{display:grid;gap:14px;min-width:0;align-content:start}
 .companion>aside{align-self:start}
+
+/* ---- Market tools ---- */
+.ip-window{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;margin:8px 0}
+.ip-window p{margin:0}
+.ip-tool label{display:block;font-weight:700;margin-bottom:4px}
+.trade-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.trade-grid label{margin:0}.trade-grid input{width:100%}
+.trade-output{margin-top:10px;grid-template-columns:repeat(2,minmax(0,1fr))}
+.alert-price{width:130px;text-align:right}
+.alert-actions{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.alert-banner{display:grid;gap:6px;margin:0 0 10px}
+.alert-hit{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;padding:8px 12px;border-radius:var(--radius-sm);background:var(--cream-2);border:2px solid var(--gold-deep)}
+.alert-hit button{margin-left:auto}
+.update-banner{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.link-button{background:none;border:0;box-shadow:none;padding:0 2px;color:var(--gold-deep);font:inherit;font-size:11px;text-decoration:underline;min-height:0}
+.link-button:hover{color:var(--maple);background:none;transform:none}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+@media(max-width:760px){.trade-output{grid-template-columns:1fr 1fr}}
+.view[data-view="trends"] .route-tabs{grid-template-columns:repeat(4,minmax(0,1fr))}
+.price-feed li>.fm-badge{justify-self:start;width:auto}
+@media(max-width:760px){.view[data-view="trends"] .route-tabs{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* ---- Falling maple leaves ---- */
+.maple-fall{position:absolute;inset:0;overflow:hidden;pointer-events:none}
+.maple-fall i{position:absolute;top:-36px;left:var(--x);width:var(--s);height:var(--s);background:url("sprites/maple-leaf.png") center/contain no-repeat;image-rendering:pixelated;opacity:.88;will-change:transform;animation:leaf-drop var(--d) linear var(--delay) infinite}
+.maple-fall i.gold{background-image:url("sprites/maple-leaf-gold.png")}
+@keyframes leaf-drop{
+ 0%{transform:translate3d(0,0,0) rotate(0)}
+ 25%{transform:translate3d(var(--sway),27vh,0) rotate(calc(var(--spin)*.3))}
+ 50%{transform:translate3d(calc(var(--sway)*-.4),54vh,0) rotate(calc(var(--spin)*.55))}
+ 75%{transform:translate3d(calc(var(--sway)*.7),81vh,0) rotate(calc(var(--spin)*.8))}
+ 100%{transform:translate3d(0,calc(100vh + 72px),0) rotate(var(--spin))}
+}
+html[data-theme="dark"] .maple-fall i{opacity:.62}
+@media(prefers-reduced-motion:reduce){.maple-fall i{animation:none;top:var(--rest);opacity:.5;transform:rotate(calc(var(--spin)*.2))}.maple-fall i:nth-child(even){display:none}}
+
+/* ---- Site admin ---- */
+.site-admin{margin-top:14px}.site-admin>summary{cursor:pointer;font-weight:700}
+.site-admin .admin-list li{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center}
+.site-admin .admin-list textarea,.site-admin .admin-list input{min-width:220px;flex:1 1 220px}

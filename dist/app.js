@@ -8,9 +8,9 @@ import {discordBody,saleEmbed,saleSessionSummary,sampleSaleEmbed} from './notifi
 import {createSession,observeStore} from './store-session.mjs?v=ms-5';
 import {chooseSoldReading,chatVisitors,parsePriceList,majorityNumber,STORE_FEE_RATE} from './sold-items.mjs?v=ms-5';
 import {parseTotal} from './detection.mjs?v=reader-4';
-import {tsvWords,locateRegions,frameScale,coinScorer} from './locate.mjs?v=autoselect-9';
-import {reportObservations,configured as boardConfigured,matchNames,iconUrl} from './api.mjs?v=ms-4';
-import * as fm from './fm-location.mjs?v=store-integration-1';
+import {tsvWords,locateRegions,frameScale,coinScorer} from './locate.mjs?v=depth-1';
+import {reportObservations,configured as boardConfigured,matchNames,iconUrl} from './api.mjs?v=depth-1';
+import * as fm from './fm-location.mjs?v=depth-1';
 import {makeLocation,locationProblems,whereToFind} from './location.mjs?v=loc-1';
 import {needAccount,SignInNeeded,ownStores,saveStore,saveListing,storeListings} from './community-api.mjs';
 const $=id=>document.getElementById(id);

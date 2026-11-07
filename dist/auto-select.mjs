@@ -1,4 +1,4 @@
-import {locateRegions,tsvWords} from './locate.mjs?v=autoselect-9';
+import {locateRegions,tsvWords} from './locate.mjs?v=depth-1';
 import {validRegion} from './capture-geometry.mjs';
 export const ESSENTIAL_REGIONS=['balance','storeItems','items'];
 export const requiredStoreRegions=()=>ESSENTIAL_REGIONS;

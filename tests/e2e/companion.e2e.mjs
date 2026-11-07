@@ -4,6 +4,7 @@ import os from 'node:os';import path from 'node:path';import fs from 'node:fs';
 import assert from 'node:assert/strict';
 import {serve,launch,newPage,checks} from './harness.mjs';
 import {writeFrames,base,frame,titled} from './frames.mjs';
+process.on('unhandledRejection',e=>{if(e?.name!=='TargetClosedError')throw e;});
 
 const channel=process.argv[2]&&!process.argv[2].startsWith('--')?process.argv[2]:'chrome',shots=process.argv.includes('--shots')?process.argv[process.argv.indexOf('--shots')+1]:null;
 const dir=process.env.E2E_FRAMES=path.join(os.tmpdir(),'mw-e2e-frames');
@@ -145,6 +146,24 @@ await c.step('Settings clears the training history',async()=>{
  await page.goto(server.url+'/#companion');await page.reload();await page.waitForSelector('[data-view="companion"]:not([hidden])');await page.waitForTimeout(400);
  assert.equal(await page.locator('#cp-sessions tr').count(),0);
 });
+await c.step('damaged saved data never stops the page',async()=>{
+ await page.evaluate(()=>{localStorage.setItem('mw-companion-sessions','{"not":"a list"}');localStorage.setItem('mw-companion-live','{"startedAt":1}');localStorage.setItem('mw-companion-quests','[1,2,3]');});
+ await page.reload();await page.waitForSelector('[data-view="companion"]:not([hidden])');await untilText('cp-quest','Walk into a party quest');
+ assert.equal(await page.locator('#cp-sessions tr').count(),0);
+ await page.evaluate(()=>{localStorage.setItem('mw-companion-sessions','[{"bad":true},null,5]');});await page.reload();await untilText('cp-quest','Walk into a party quest');assert.equal(await page.locator('#cp-sessions tr').count(),0);
+});
+await c.step('a failed download of the game data is explained',async()=>{
+ await page.route('**/classic-data.json*',r=>r.fulfill({status:500,body:''}));await page.reload();await page.waitForSelector('[data-view="companion"]:not([hidden])');
+ await show('start');await page.click('#cp-connect');await untilText('cp-status','Could not load the map list');assert.equal(await page.isDisabled('#cp-pause'),true);
+ await page.unroute('**/classic-data.json*');await page.evaluate(()=>window.__capture.end());
+});
+await c.step('dark mode draws the Companion in its own colours',async()=>{
+ await page.reload();await page.waitForSelector('[data-view="companion"]:not([hidden])');await page.click('#theme-toggle');
+ assert.equal(await page.evaluate(()=>document.documentElement.dataset.theme),'dark');
+ const bg=await page.evaluate(()=>getComputedStyle(document.querySelector('.companion .kpi')).backgroundColor);assert.notEqual(bg,'rgb(253, 243, 216)','a dark card, not the light one');
+ await shot('dark');await page.click('#theme-toggle');
+});
 await c.step('no page errors',async()=>{assert.deepEqual(errors,[]);});
 await page.context().close();await browser.close();await server.close();
 if(!c.summary())process.exit(1);
+process.exit(0);

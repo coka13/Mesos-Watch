@@ -9,13 +9,13 @@ import {chromium} from 'playwright-core';
 
 const root=path.resolve(import.meta.dirname,'../../dist');
 const MIME={'.html':'text/html','.js':'text/javascript','.mjs':'text/javascript','.css':'text/css','.svg':'image/svg+xml','.png':'image/png','.gif':'image/gif','.woff':'font/woff','.woff2':'font/woff2','.json':'application/json'};
-export function serve({port=0,config=null}={}){
+export function serve({port=0,config=null,dist=root}={}){
  const server=http.createServer((req,res)=>{
   const name=decodeURIComponent(new URL(req.url,'http://127.0.0.1').pathname);
   if(name==='/config.js'){res.writeHead(200,{'Content-Type':'text/javascript','Cache-Control':'no-store'}).end('window.MESOSWATCH_CONFIG='+JSON.stringify(config||{})+';');return;}
   if(name.startsWith('/__frames/')){fs.readFile(path.join(process.env.E2E_FRAMES,name.slice(10)),(e,d)=>{if(e){res.writeHead(404).end();return;}res.writeHead(200,{'Content-Type':'image/png','Cache-Control':'no-store'}).end(d);});return;}
-  const file=path.resolve(root,'.'+(name==='/'?'/index.html':name));
-  if(!file.startsWith(root+path.sep)){res.writeHead(403).end();return;}
+  const file=path.resolve(dist,'.'+(name==='/'?'/index.html':name));
+  if(!file.startsWith(path.resolve(dist)+path.sep)){res.writeHead(403).end();return;}
   fs.readFile(file,(e,d)=>{if(e){res.writeHead(404).end();return;}res.writeHead(200,{'Content-Type':MIME[path.extname(file)]||'application/octet-stream','Cache-Control':'no-store'}).end(d);});
  });
  return new Promise(r=>server.listen(port,'127.0.0.1',()=>r({url:'http://127.0.0.1:'+server.address().port,close:()=>new Promise(c=>{server.closeAllConnections();server.close(c);})})));

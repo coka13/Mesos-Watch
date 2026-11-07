@@ -292,3 +292,31 @@ create or replace function public.remove_character(p_name text,p_world text defa
 $$;
 revoke all on function public.report_character(text,text,text,int),public.remove_character(text,text) from public,anon;
 grant execute on function public.report_character(text,text,text,int),public.remove_character(text,text) to authenticated;
+
+-- ---- Site notice ----
+-- A message for every visitor, such as game maintenance, set by the owner in site_settings (key 'site_notice'). Empty means none.
+create or replace function public.site_notice() returns text language sql stable security definer set search_path=public as $$
+ select coalesce((select value from site_settings where key='site_notice'),'')
+$$;
+grant execute on function public.site_notice() to anon,authenticated;
+
+-- ---- Price alerts ----
+-- As in 20261101001100, with the best open listing of the last hour instead of only the newest sighting: a cheap listing no longer
+-- hides behind a dearer one read a minute later. Sold and gone listings no longer count, and a watch without stats matches any variant.
+create or replace function public.evaluate_price_alerts() returns integer language plpgsql security definer set search_path=public as $$
+declare w watchlist;o observations;met boolean;total integer:=0;
+begin
+ if not registered_player()then raise exception 'Registered account required' using errcode='42501';end if;
+ for w in select * from watchlist where owner=auth.uid() and threshold is not null for update skip locked loop
+  select * into o from observations
+   where item_id=w.item_id and world=w.world and (w.stats='{}'::jsonb or stats=w.stats) and kind='ask' and verification_status<>'rejected'
+     and sold_at is null and gone_at is null and last_seen_at>now()-interval '1 hour'
+   order by case when w.direction='below' then price end asc,case when w.direction='above' then price end desc,last_seen_at desc limit 1;
+  met:=o.id is not null and case when w.direction='below' then o.price<=w.threshold else o.price>=w.threshold end;
+  if met and not w.last_met and (w.last_alert_at is null or w.last_alert_at<now()-interval '30 minutes')then
+   insert into price_alert_events(owner,watch_id,observation_id,price)values(auth.uid(),w.id,o.id,o.price)on conflict do nothing;
+   if found then total:=total+1;update watchlist set last_alert_at=now() where id=w.id;end if;
+  end if;
+  update watchlist set last_met=met where id=w.id;
+ end loop;return total;
+end $$;

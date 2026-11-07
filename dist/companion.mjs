@@ -3,9 +3,11 @@
 import {findStatusBar,readBar,identityAreas,levelPixels,readScale,parseLevel,closestJob,cleanCharacterName} from './hud.mjs?v=1';
 import * as core from './companion-core.mjs?v=1';
 import {closestMap,createQuestLog,observeMap,routeView,ROUTES,WIKI} from './companion-quests.mjs?v=1';
-import * as fm from './fm-location.mjs?v=store-integration-1';
+import * as fm from './fm-location.mjs?v=depth-1';
 import {ocrImage} from './ocr-prep.mjs?v=prep-2';
 import {expChartSvg} from './chart.mjs?v=exp-1';
+import {configured,rankings,publishCharacter,unpublishCharacter} from './api.mjs?v=depth-1';
+import {ago} from './checker.mjs?v=depth-1';
 const $=id=>document.getElementById(id);
 const el=(tag,props={},...kids)=>{const e=Object.assign(document.createElement(tag),props);e.append(...kids.filter(k=>k!=null&&k!==false));return e;};
 const fmt=n=>n==null?'—':Number(n).toLocaleString('en-US');
@@ -15,11 +17,14 @@ const SESSIONS='mw-companion-sessions',LIVE='mw-companion-live',QUESTS='mw-compa
 const READ_EVERY=1000,PLACE_EVERY=3000,SAVE_EVERY=15000,STRIP_FROM=.7,RELOCATE_AFTER=6,MISS_WARNING=12,WHO_RETRY=20000,WHO_TRIES=4;
 const load=(key,fallback)=>{try{return JSON.parse(localStorage.getItem(key))??fallback;}catch{return fallback;}};
 const store=(key,value)=>{try{localStorage.setItem(key,JSON.stringify(value));return true;}catch{return false;}};
-const st={enabled:false,session:null,history:load(SESSIONS,[]),log:createQuestLog(load(QUESTS,null)),data:null,bar:null,last:null,outcome:null,misses:0,blind:0,stop:null,busy:false,chart:'map',savedAt:0,pip:null,
+const validSession=s=>!!s&&Number.isFinite(s.startedAt)&&Array.isArray(s.minutes)&&Array.isArray(s.segments)&&Array.isArray(s.readings);
+const savedSessions=()=>{const list=load(SESSIONS,[]);return Array.isArray(list)?list.filter(validSession):[];};
+function savedQuests(){const q=load(QUESTS,null);return q&&typeof q.records==='object'&&q.records&&Array.isArray(q.recent)?q:null;}
+const st={enabled:false,session:null,history:savedSessions(),log:createQuestLog(savedQuests()),data:null,bar:null,last:null,outcome:null,misses:0,blind:0,stop:null,busy:false,chart:'map',savedAt:0,pip:null,
  place:{status:'unknown',map:null,thumb:null,at:0,busy:false},who:{need:true,busy:false,at:0,tries:0,names:[]},saveFailed:false};
 
 // A session left running when the page closed goes into the history.
-{const live=load(LIVE,null);if(live){core.end(live,live.lastSeen??live.startedAt);if(live.gained>0||live.readingsCount>1)st.history=[live,...st.history].slice(0,KEEP_SESSIONS);store(SESSIONS,st.history);try{localStorage.removeItem(LIVE);}catch{}}}
+{const live=load(LIVE,null);if(validSession(live)){core.end(live,live.lastSeen??live.startedAt);if(live.gained>0||live.readingsCount>1)st.history=[live,...st.history].slice(0,KEEP_SESSIONS);store(SESSIONS,st.history);}try{localStorage.removeItem(LIVE);}catch{}}
 
 // ---- Frames ----
 const scratch=document.createElement('canvas'),sg=scratch.getContext('2d',{willReadFrequently:true});
@@ -145,6 +150,7 @@ $('cp-connect').onclick=async()=>{
   const now=Date.now();
   if(st.session?.status==='paused')core.resume(st.session,now);else if(!st.session)begin(now);
   startTicker();status('Tracking. Play as usual: this page reads your status bar once a second.','ok');
+ }catch(e){showError(e.message);
  }finally{button.disabled=false;controls();render(Date.now());}
 };
 $('cp-pause').onclick=()=>{
@@ -186,7 +192,7 @@ function render(now){
  renderHelp(now);
  if(st.pip)renderPip(now);
  if(document.body.dataset.view!=='companion')return;
- renderChart(now);renderTables(now);renderQuest(now);renderPlace();renderDebug();
+ renderChart(now);renderTables(now);renderQuest(now);renderPlace();renderDebug();rkControls();
 }
 function renderChart(now){
  const list=st.session||st.history[0],box=$('cp-chart');
@@ -297,6 +303,44 @@ $('cp-popout').onclick=async()=>{
  }catch(e){status(e.name==='NotAllowedError'?'The browser needs a click to open the pop-out. Try again.':'The pop-out could not open: '+e.message,'error');}
 };
 
+// ---- Rankings: what players chose to publish about their own character ----
+let rkPage=0,rkRequest=0;
+const rkWorld=()=>$('world').value||'';
+async function loadRankings(){
+ const request=++rkRequest,body=$('rk-rows');
+ if(!configured()){body.replaceChildren();$('rk-empty').hidden=false;$('rk-empty').textContent='Rankings appear once the community database is connected.';$('rk-next').disabled=$('rk-prev').disabled=true;return;}
+ try{
+  const out=await rankings(rkWorld(),{job:$('rk-job').value,page:rkPage});if(request!==rkRequest)return;
+  if(out===null){$('rk-empty').hidden=false;$('rk-empty').textContent='Rankings appear once the site’s database is updated.';return;}
+  body.replaceChildren(...out.rows.map((r,i)=>el('tr',{},el('td',{className:'num',textContent:String(rkPage*50+i+1)}),el('td',{textContent:r.name}),el('td',{textContent:r.job}),el('td',{className:'num',textContent:String(r.level)}),el('td',{className:'when',textContent:ago(r.last_seen),title:new Date(r.last_seen).toLocaleString()}))));
+  $('rk-empty').hidden=out.rows.length>0;$('rk-empty').textContent='Nobody has published a character here yet.';
+  $('rk-prev').disabled=rkPage===0;$('rk-next').disabled=!out.more;
+ }catch(e){if(request===rkRequest){body.replaceChildren();$('rk-empty').hidden=false;$('rk-empty').textContent=e.message;}}
+}
+function fillJobs(){const box=$('rk-job');if(box.options.length>1||!st.data)return;box.append(...st.data.jobs.map(j=>new Option(j,j)));}
+const rkName=()=>$('rk-name').value.trim();
+function rkControls(){
+ const s=st.session,name=/^[A-Za-z0-9]{2,12}$/.test(rkName());
+ $('rk-publish').disabled=!(name&&s?.level&&s?.job&&configured());$('rk-remove').disabled=!(name&&configured());
+ if(s?.name&&!$('rk-name').value)$('rk-name').value=s.name;
+ const need=!s?'Start tracking first, so your level and job can be read.':!s.level||!s.job?'Waiting to read your level and job from the status bar.':'';
+ if(need&&!$('rk-note').dataset.done)set('rk-note',need);else if(!need&&!$('rk-note').dataset.done)set('rk-note','');
+}
+$('rk-name').addEventListener('input',rkControls);
+$('rk-job').onchange=()=>{rkPage=0;loadRankings();};
+$('rk-prev').onclick=()=>{rkPage=Math.max(0,rkPage-1);loadRankings();};
+$('rk-next').onclick=()=>{rkPage++;loadRankings();};
+$('rk-publish').onclick=async()=>{
+ const s=st.session;if(!s?.level||!s.job)return;
+ try{await publishCharacter({world:rkWorld(),name:rkName(),job:s.job,level:s.level});$('rk-note').dataset.done='1';set('rk-note',`${rkName()} is on the rankings at level ${s.level}.`);rkPage=0;await loadRankings();}
+ catch(e){$('rk-note').dataset.done='1';set('rk-note',e.message);}
+};
+$('rk-remove').onclick=async()=>{
+ try{const gone=await unpublishCharacter({world:rkWorld(),name:rkName()});$('rk-note').dataset.done='1';set('rk-note',gone?`${rkName()} was removed from the rankings.`:'That character is not one you published.');await loadRankings();}
+ catch(e){$('rk-note').dataset.done='1';set('rk-note',e.message);}
+};
+window.addEventListener('mesoswatch:world',()=>{rkPage=0;if(document.body.dataset.view==='companion')loadRankings();});
+
 // ---- Page ----
 async function ready(){
  if(st.data)return st.data;
@@ -310,11 +354,12 @@ function browserNote(){
  box.hidden=capture&&!firefox;
  box.textContent=!capture?'Screen sharing is not available in this browser. Open this page on a computer, in Chrome or Edge.':'Firefox can share a window, but the pop-out and background tracking work only in Chrome and Edge.';
 }
-window.addEventListener('mesoswatch:view',e=>{if(e.detail.view==='companion'){browserNote();ready().then(()=>render(Date.now())).catch(err=>status(err.message,'error'));controls();}});
+const opened=()=>{browserNote();ready().then(()=>{fillJobs();render(Date.now());}).catch(err=>status(err.message,'error'));controls();loadRankings();};
+window.addEventListener('mesoswatch:view',e=>{if(e.detail.view==='companion')opened();});
 $('set-clear-training').onclick=()=>{
  if(st.session)return set('set-clear-note','Stop your Companion session first.');
  st.history=[];st.log=createQuestLog();try{for(const k of [SESSIONS,LIVE,QUESTS])localStorage.removeItem(k);}catch{}
  set('set-clear-note','Training history cleared.');
 };
-if(document.body.dataset.view==='companion'){browserNote();ready().then(()=>render(Date.now())).catch(()=>{});}
+if(document.body.dataset.view==='companion')opened();
 controls();renderHelp();

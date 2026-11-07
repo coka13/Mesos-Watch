@@ -96,6 +96,25 @@ for(const [i,p] of [100,110,120,130].entries())await ask(A,{price:p,title:shops[
  assert.equal((await as('',`select count(*)::int n from public_rankings`))[0].n,0);
  await pub(A,'Second',40);assert.equal((await as(ADMIN,`select remove_character('Second','') r`))[0].r,true,'an admin can remove one');}
 
+// Alerts look at the best open listing of the last hour, not only the newest sighting.
+{const item=await newItem('Alert Item');await db.exec(`update auth.users set email='a@example.test' where id='${A}'`);
+ const events=async()=>as(A,`select price from price_alert_events order by created_at desc`);
+ await as(A,`insert into watchlist(item_id,world,stats,threshold,direction)values($1,'','{}',1000,'below')`,[item]);
+ const [cheap]=await ask(B,{item:'Alert Item',price:900,title:'Shop A',channel:31});await ask(B,{item:'Alert Item',price:2000,title:'Shop B',channel:32});
+ assert.equal((await as(A,`select evaluate_price_alerts() n`))[0].n,1,'the cheap listing fires though a dearer one was read after it');
+ assert.equal(Number((await events())[0].price),900);
+ assert.equal((await as(A,`select evaluate_price_alerts() n`))[0].n,0,'once only');
+ // A sold or gone listing fires nothing.
+ const other=await newItem('Sold Alert');await as(A,`insert into watchlist(item_id,world,stats,threshold,direction)values($1,'','{}',500,'below')`,[other]);
+ const [g]=await ask(B,{item:'Sold Alert',price:400,title:'Shop C',channel:33});await db.query(`update observations set gone_at=now() where id=$1`,[g.id]);
+ assert.equal((await as(A,`select evaluate_price_alerts() n`))[0].n,0,'gone is not for sale');
+ // Dearer than the mark, for a seller watching the other way.
+ const up=await newItem('Up Alert');await as(A,`insert into watchlist(item_id,world,stats,threshold,direction)values($1,'','{}',5000,'above')`,[up]);await ask(B,{item:'Up Alert',price:6000,title:'Shop D',channel:34});await ask(B,{item:'Up Alert',price:100,title:'Shop E',channel:35});
+ assert.equal((await as(A,`select evaluate_price_alerts() n`))[0].n,1);assert.equal(Number((await events())[0].price),6000);
+ // Variants: a watch without stats matches any; a watch on a stat line only that line.
+ const v=await newItem('Variant Alert','equip');await as(A,`insert into watchlist(item_id,world,stats,threshold,direction)values($1,'','{"watk":10}',800,'below')`,[v]);await ask(B,{item:'Variant Alert',price:700,title:'Shop F',channel:36});
+ assert.equal((await as(A,`select evaluate_price_alerts() n`))[0].n,0,'another stat line');}
+
 // Reporting a listing needs a row id.
 {const [l]=await as('',`select * from current_listings($1,'')`,[potion]);assert.ok(Number(l.observation_id)>0);}
 console.log('Market depth: windows, stale and repeat counts, outliers, gone listings, sell-through, flips and rankings passed.');
