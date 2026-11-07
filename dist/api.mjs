@@ -180,3 +180,52 @@ export const unverifiedItems=async()=>rows((await client()).from('items').select
 export const catalogSyncLog=async()=>rows((await client()).from('catalog_sync_log').select('requested_at,finished_at,status,items,message').order('id',{ascending:false}).limit(6),'Could not load catalog updates');
 export const catalogSyncNow=async()=>rows((await client()).rpc('catalog_sync_now'),'Could not start a catalog update');
 export async function updateItem(id,patch){const sb=await client();return rows(sb.from('items').update(patch).eq('id',id).select().single(),'Could not update the item');}
+
+// ---- Market depth (migration 20261107000000). Until it is applied each call falls back to what the database has. ----
+const missing=e=>/^(PGRST20[25]|42P01|42883)$/.test(e?.code||'');
+// The market index over a window of days. Row fields are the same with or without the migration; legacy rows are 7 days only.
+export async function marketIndexWindow(world='',days=7,lim=300){
+ const sb=await client(),{data,error}=await sb.rpc('market_index_window',{p_world:world,lim,p_days:days});
+ if(!error)return data;
+ if(!missing(error))throw Error('Could not load the market index: '+error.message);
+ return(await marketIndex(world,lim)).map(r=>({...r,window_days:7,listings:r.listings_7d,sold_seen:r.sold_seen_7d,sold_median:r.sold_median_7d,sales:r.sales_30d,sale_median:r.sale_median_30d,stale_listings:null,unusual:null,sell_through_pct:null,windowless:true}));
+}
+export async function itemStats(id,world='',days=7){const {data,error}=await(await client()).rpc('item_stats',{p_item:id,p_world:world,p_days:days});if(error){if(missing(error))return null;throw Error('Could not load prices: '+error.message);}return data;}
+export async function marketFlips(world='',days=7){const {data,error}=await(await client()).rpc('market_flips',{p_world:world,p_days:days,lim:30});if(error){if(missing(error))return null;throw Error('Could not load opportunities: '+error.message);}return data;}
+// A shop seen whole no longer shows some listings: they are gone (inferred, and reversed if they are seen again).
+export async function closeMissingListings({world='',channel,map,shopKey,shopTitle,items}){
+ const sb=await session(),matched=new Map((await matchNames([...new Set(items.map(i=>i.item))])).map(m=>[m.input,m]));
+ const keep=items.map(i=>({item_id:matched.get(i.item)?.item_id,price:i.price,qty:i.qty})).filter(k=>k.item_id);
+ if(keep.length<items.length)return 0;
+ const {data,error}=await sb.rpc('close_missing_listings',{p_world:world,p_channel:channel,p_map:map,p_shop_key:shopKey,p_shop_title:shopTitle,p_keep:keep});
+ if(error){if(missing(error)||/rate limit/i.test(error.message))return 0;throw Error('Could not update the shop: '+error.message);}
+ return data||0;
+}
+export async function rankings(world='',{job='',page=0,size=50}={}){
+ let q=(await client()).from('public_rankings').select('id,name,job,level,last_seen').eq('world',world);if(job)q=q.eq('job',job);
+ const {data,error}=await q.order('level',{ascending:false}).order('last_seen',{ascending:false}).range(page*size,page*size+size);
+ if(error){if(missing(error))return null;throw Error('Could not load the rankings: '+error.message);}
+ return{rows:data.slice(0,size),more:data.length>size};
+}
+export async function publishCharacter({world='',name,job,level}){const sb=await session(),{error}=await sb.rpc('report_character',{p_world:world,p_name:name,p_job:job,p_level:level});if(error)throw Error(/another player/.test(error.message)?'That character was already published by another player.':/too many/.test(error.message)?'You have published the most characters allowed.':'Could not publish: '+error.message);}
+export async function unpublishCharacter({world='',name}){const sb=await session(),{data,error}=await sb.rpc('remove_character',{p_name:name,p_world:world});if(error)throw Error('Could not remove: '+error.message);return data;}
+export async function siteNotice(){const {data,error}=await(await client()).rpc('site_notice');return error?'':String(data||'');}
+export async function reportListing(observationId,reason){const sb=await client(),{error}=await sb.from('market_reports').insert({observation_id:observationId,reason});if(error)throw Error(/rate/i.test(error.message)?'You have sent several reports recently. Try again later.':/duplicate|unique/i.test(error.message)?'You already reported this listing.':'Could not send the report: '+error.message);}
+// Price alerts. The database checks them; this only reads them, and only for a signed-in player.
+export async function myAlerts(world=''){
+ const sb=await client(),{data,error}=await sb.from('watchlist').select('id,item_id,world,stats,threshold,direction,created_at,item:items(id,name,game_id,icon_path,category)').eq('world',world).order('created_at',{ascending:false});
+ if(error){if(missing(error))return null;throw Error('Could not load your alerts: '+error.message);}
+ return data;
+}
+export async function saveAlert({id=null,itemId,world='',threshold,direction='below'}){
+ const sb=await client(),q=id?sb.from('watchlist').update({threshold,direction}).eq('id',id):sb.from('watchlist').upsert({item_id:itemId,world,stats:{},threshold,direction},{onConflict:'owner,item_id,world,stats'});
+ const {error}=await q;if(error)throw Error('Could not save the alert: '+error.message);
+}
+export async function removeAlert(id){const {error}=await(await client()).from('watchlist').delete().eq('id',id);if(error)throw Error('Could not remove the alert: '+error.message);}
+export async function checkAlerts(){
+ const sb=await client(),{error}=await sb.rpc('evaluate_price_alerts');if(error&&!missing(error))throw Error('Could not check alerts: '+error.message);
+ const {data,error:e}=await sb.from('price_alert_events').select('id,price,read_at,created_at,watch:watchlist(world,item:items(id,name,game_id,icon_path,category))').is('read_at',null).order('created_at',{ascending:false}).limit(20);
+ if(e){if(missing(e))return[];throw Error('Could not load alerts: '+e.message);}
+ return data;
+}
+export async function markAlertRead(id){const {error}=await(await client()).from('price_alert_events').update({read_at:new Date().toISOString()}).eq('id',id);if(error)throw Error('Could not update the alert: '+error.message);}

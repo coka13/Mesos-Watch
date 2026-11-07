@@ -1,5 +1,5 @@
-import {configured,searchItems,getItem,itemSummary,client} from './api.mjs?v=ms-4';
-import {iconEl,mesoAmt,ago,statText} from './checker.mjs?v=ms-8';
+import {configured,searchItems,getItem,itemSummary,client} from './api.mjs?v=depth-1';
+import {iconEl,mesoAmt,ago,statText} from './checker.mjs?v=depth-1';
 
 import {whereToFind} from './location.mjs?v=loc-1';
 import * as api from './community-api.mjs';

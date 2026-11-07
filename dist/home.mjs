@@ -1,8 +1,8 @@
 // Home page extras below the price checker: market statistics and community stores. Real counts only; nothing is estimated.
-import {client,configured} from './api.mjs?v=ms-4';
+import {client,configured} from './api.mjs?v=depth-1';
 import {whereToFind} from './location.mjs?v=loc-1';
 import {publicStores} from './community-api.mjs';
-import {ago} from './checker.mjs?v=ms-8';
+import {ago} from './checker.mjs?v=depth-1';
 const $=id=>document.getElementById(id);
 const el=(tag,props={},...kids)=>{const e=Object.assign(document.createElement(tag),props);e.append(...kids.filter(k=>k!=null&&k!==false));return e;};
 const fmt=n=>n==null?'—':Number(n).toLocaleString('en-US');

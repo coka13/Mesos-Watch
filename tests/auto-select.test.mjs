@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';import fs from 'node:fs';
 import {locateRegions}from '../dist/locate.mjs';
-import {detectStoreRegions,enhanceFramePixels}from '../dist/auto-select.mjs';
+import {detectStoreRegions,enhanceFramePixels,storeRegionsReady}from '../dist/auto-select.mjs';
 const word=(text,x,y,w=text.length*7,confidence=95)=>({text,x,y,w,h:12,confidence});
 const inline=[word('Sold Items',400,50),word('Example Scroll',400,80),word('Buyer: Test',400,100),word('Number purchased: 1',400,120),word('Total Sales:',400,200),word('10,000',510,200),word('Total Received:',650,200),word('9,700',780,200),word('Inventory',60,300),word('Mesos:',60,350),word('50,000',140,350)];
 const found=locateRegions(inline,1000,700);
@@ -14,13 +14,21 @@ const fixture=fs.readFileSync('tests/fixtures/store-3x.tsv','utf8'),coins=JSON.p
 const input={width:2268,height:1380,sourceWidth:756,sourceHeight:460,scale:3,coinScore:w=>coins[w.x+','+w.y]||0};
 let passes=[];
 let result=await detectStoreRegions({...input,recognize:async pass=>{passes.push(pass.name);return{data:{tsv:passes.length===1?'':fixture,confidence:90}};}});
-assert.deepEqual(passes,['original','contrast']);assert.deepEqual(result.missing,[]);assert.equal(result.attempts.length,2);
+assert.deepEqual(passes,['original','contrast','threshold']);assert.deepEqual(result.missing,['storeItems']);assert.equal(result.attempts.length,3);
 passes=[];result=await detectStoreRegions({...input,recognize:async pass=>{passes.push(pass.name);return{data:{tsv:fixture,confidence:90}};}});
-assert.deepEqual(passes,['original'],'already complete detections need no fallback');
+assert.equal(passes.length,3,'a missing store item area triggers alternate passes');
+assert.equal(result.regions.total,undefined,'watcher never selects Total Sales');
+assert.equal(storeRegionsReady({balance:{},items:{},storeItems:{}}),true,'three watcher regions suffice without Total Sales');
+assert.equal(storeRegionsReady({balance:{},items:{},total:{}}),false,'Total Sales cannot substitute for store items');
 passes=[];result=await detectStoreRegions({...input,recognize:async pass=>{passes.push(pass.name);return{data:{tsv:'',confidence:0}};}});
-assert.equal(passes.length,3);assert.deepEqual(result.regions,{});assert.deepEqual(result.missing,['total','items','balance']);
+assert.equal(passes.length,3);assert.deepEqual(result.regions,{});assert.deepEqual(result.missing,['balance','storeItems','items']);
 let current=true;result=await detectStoreRegions({...input,isCurrent:()=>current,recognize:async()=>{current=false;return{data:{tsv:fixture,confidence:99}};}});
 assert.equal(result.cancelled,true);assert.deepEqual(result.regions,{},'changed frames cannot apply stale boxes');
 const rgba=new Uint8ClampedArray([100,120,140,255,200,200,200,255]),copy=new Uint8ClampedArray(rgba),enhanced=enhanceFramePixels(rgba,true);
 assert.deepEqual(rgba,copy);assert.equal(enhanced.length,rgba.length);assert.deepEqual([...enhanced],[0,0,0,255,255,255,255,255]);
 console.log('Auto Select: inline/merged labels, inventory labels, ambiguous totals, multi-pass fallback, stale frames and unchanged coordinate origins passed.');
+
+const emptyPanel=locateRegions([word('Total Sales',400,200),word('0',400,222),word('0',400,244)],1000,700);
+assert.ok(emptyPanel.total,'empty panel total can still be located');
+assert.equal(emptyPanel.items,undefined,'empty list position requires an anchor');
+assert.equal(emptyPanel.sale,undefined,'never guess a sale snapshot above an empty panel');

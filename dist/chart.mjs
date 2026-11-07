@@ -27,3 +27,25 @@ export function chartSvg(rows,{range='7d',now=Date.now(),width=720,height=240}={
  out.push('</svg>');
  return out.join('');
 }
+
+// EXP per minute as bars, one series, from [{minute,gained}] (companion-core series). Long sessions group minutes so that bars stay
+// wide enough to read and to point at. Every bar's value is in its tooltip, and a tall hit area makes low bars easy to hover.
+export function expChartSvg(points,{width=720,height=200}={}){
+ const empty=text=>`<svg class="price-chart exp-chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="${esc(text)}"><text x="${width/2}" y="${height/2}" text-anchor="middle" class="empty">${esc(text)}</text></svg>`;
+ if(!points.some(p=>p.gained>0))return empty('No EXP gained in this period yet');
+ const P={l:64,r:12,t:12,b:24},W=width-P.l-P.r,H=height-P.t-P.b,MAX_BAR=24,span=Math.max(1,Math.ceil(points.length/(W/6))),bars=[];
+ for(let i=0;i<points.length;i+=span){const part=points.slice(i,i+span);bars.push({from:part[0].minute,to:part.at(-1).minute,value:part.reduce((n,p)=>n+p.gained,0)/part.length});}
+ // A short session keeps narrow bars and leaves the rest of the plot empty: one minute of training should not look like a wall.
+ const top=Math.max(...bars.map(b=>b.value))*1.08,step=Math.min(MAX_BAR,W/bars.length),gap=Math.min(2,step*.25),y=v=>P.t+H*(1-v/top);
+ const out=[`<svg class="price-chart exp-chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="${esc(`EXP per minute, highest ${shortMesos(Math.round(Math.max(...bars.map(b=>b.value))))}`)}">`];
+ for(let i=0;i<=3;i++){const v=top*i/3,yy=y(v).toFixed(1);out.push(`<line class="grid" x1="${P.l}" x2="${width-P.r}" y1="${yy}" y2="${yy}"/><text class="axis" x="${P.l-6}" y="${(+yy+4).toFixed(1)}" text-anchor="end">${esc(shortMesos(Math.round(v)))}</text>`);}
+ const base=y(0),r=Math.min(4,(step-gap)/2);
+ bars.forEach((b,i)=>{
+  const x=P.l+i*step+gap/2,w=Math.max(1,step-gap),h=base-y(b.value),when=b.from===b.to?`Minute ${b.from+1}`:`Minutes ${b.from+1}–${b.to+1}`;
+  const shape=b.value>0?`<path class="exp-bar" d="M${x.toFixed(1)},${base.toFixed(1)}v${-Math.max(0,h-r).toFixed(1)}q0,${-r.toFixed(1)} ${r.toFixed(1)},${-r.toFixed(1)}h${(w-2*r).toFixed(1)}q${r.toFixed(1)},0 ${r.toFixed(1)},${r.toFixed(1)}v${Math.max(0,h-r).toFixed(1)}z"/>`:'';
+  out.push(`<g class="exp-col"><rect class="exp-hit" x="${(P.l+i*step).toFixed(1)}" y="${P.t}" width="${step.toFixed(1)}" height="${H}"/>${shape}<title>${esc(when+': '+shortMesos(Math.round(b.value))+' EXP per minute')}</title></g>`);
+ });
+ const label=m=>'Minute '+(m+1);
+ out.push(`<text class="axis" x="${P.l}" y="${height-6}">${label(bars[0].from)}</text>${bars.length>1?`<text class="axis" x="${(P.l+step*bars.length).toFixed(1)}" y="${height-6}" text-anchor="end">${label(bars.at(-1).to)}</text>`:''}</svg>`);
+ return out.join('');
+}

@@ -1,7 +1,7 @@
 // PayPal and crypto (NOWPayments) payments for megaphones, sponsor slots and donations. The browser only starts a payment
 // and returns from it; prices come from the database and every payment is confirmed on the server
 // (supabase/functions/pay-create, paypal-capture, nowpayments-ipn) before anything goes live.
-import {configured,client,session,adminState} from './api.mjs?v=ms-4';
+import {configured,client,session,adminState} from './api.mjs?v=depth-1';
 
 const config=window.MESOSWATCH_CONFIG||{},pay=config.payments||{};
 const PROVIDERS=(Array.isArray(pay.providers)?pay.providers:['paypal','crypto']).filter(p=>p==='paypal'||p==='crypto');
@@ -166,3 +166,4 @@ function init(){megaphoneButtons();donationBox();sponsorDialog();liveSponsor();h
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
 window.addEventListener('hashchange',handleReturn);
 window.addEventListener('mesoswatch:view',e=>{if(e.detail?.view==='settings')setTimeout(adminPanels,600);});
+window.addEventListener('mesoswatch:admin-ready',adminPanels);

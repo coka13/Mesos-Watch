@@ -1,11 +1,11 @@
 // Public navigation, world picker, FM Megaphones and browser-data controls.
-import {searchItems,NOT_SET_UP,configured,worlds,megaphonePlans,liveMegaphones,myMegaphones} from './api.mjs?v=ms-4';
+import {searchItems,NOT_SET_UP,configured,worlds,megaphonePlans,liveMegaphones,myMegaphones,siteNotice} from './api.mjs?v=depth-1';
 import {checkMegaphone,MAX_MESSAGE} from './megaphone-rules.mjs?v=pc-1';
-import {show,worldChanged,iconEl} from './checker.mjs?v=ms-8';
+import {show,worldChanged,iconEl} from './checker.mjs?v=depth-1';
 const $=id=>document.getElementById(id);
 const el=(tag,props={},...kids)=>{const e=Object.assign(document.createElement(tag),props);e.append(...kids.filter(k=>k!=null&&k!==false));return e;};
 const money=c=>'$'+(c/100).toFixed(2);
-const VIEWS=['checker','trends','scanner','history','megaphones','store','settings','stores'];
+const VIEWS=['checker','trends','scanner','history','megaphones','store','settings','stores','companion'];
 const LEGACY={watcher:'store','sale-activity':'store',support:'store',discord:'store',guide:'settings',prices:'checker',item:'checker'};
 
 // ---- Router ----
@@ -150,3 +150,20 @@ document.addEventListener('keydown',e=>{if(e.key==='/'&&!e.ctrlKey&&!e.metaKey&&
 $('config-missing').hidden=configured();
 if(configured())megaphonePlans().catch(e=>{if(e.message===NOT_SET_UP){$('config-missing').textContent=NOT_SET_UP;$('config-missing').hidden=false;}});
 route();loadStrip();
+
+// ---- Site notice and new versions ----
+async function showNotice(){if(!configured())return;const text=await siteNotice().catch(()=>''),box=$('site-notice');box.textContent=text;box.hidden=!text;}
+showNotice();setInterval(showNotice,5*6e4);
+// A page left open keeps running old code, so a new deployment is announced: the published page is compared with the one loaded.
+const pageVersion=text=>[...text.matchAll(/[?]v=[^"]+/g)].map(m=>m[0]).join('');
+let loadedVersion=null;
+async function checkVersion(){
+ if(document.hidden)return;
+ try{
+  const r=await fetch(location.pathname,{cache:'no-store'});if(!r.ok)return;
+  const now=pageVersion(await r.text());if(!now)return;
+  loadedVersion??=now;if(now!==loadedVersion)$('update-banner').hidden=false;
+ }catch{/* offline for a moment: checked again later */}
+}
+$('update-reload').onclick=()=>location.reload();
+checkVersion();setInterval(checkVersion,5*6e4);document.addEventListener('visibilitychange',checkVersion);

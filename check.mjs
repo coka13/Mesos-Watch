@@ -89,9 +89,11 @@ console.log('Shop listing checks passed: names, per-item prices, bundles, low co
   assert.ok(r.sale.y<=32&&r.sale.y+r.sale.h>=139&&r.sale.x+r.sale.w>=740,'sale snapshot covers entry and totals at scale '+s);
   assert.deepEqual(r.balance,{x:131,y:135,w:43,h:16},'balance at scale '+s);
  }
- // No sales yet: the totals are still found and the list area is estimated until the window changes.
+ // Empty layouts can put their list below the totals. Require an item anchor.
  const empty=locateRegions(shot.filter(w=>w.y<20||w.y>=94),756,460,1,coin);
- assert.ok(empty.total&&empty.items&&empty.itemsEstimated);
+ assert.ok(empty.total);
+ assert.equal(empty.items,undefined);
+ assert.equal(empty.sale,undefined);
  // Received larger than Sales cannot be a stacked total pair.
  assert.equal(locateRegions(shot.map(w=>w.text==='13,269'?{...w,text:'99,999'}:w),756,460,1,coin).total,undefined);
  // OCR slips on the labels and digits: fused "TotalSales", "Tota1 Sa1es", "13,679mesos", a low-confidence number.

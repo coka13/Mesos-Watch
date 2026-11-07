@@ -227,6 +227,8 @@ body>header,body>main,body>footer{min-width:0}
 
 /* ---- Themed empty states ---- */
 .price-feed li.empty:not(.error)::before,.admin-list li.empty:not(.error)::before,p.empty:not(.error)::before{content:"";display:inline-block;width:30px;height:24px;margin-right:8px;vertical-align:middle;background:url(sprites/slime.gif) center/contain no-repeat;image-rendering:pixelated}
+ul.price-feed:empty::after,ul.admin-list:empty::after{content:'Loading…';display:block;padding:12px 4px;font:400 12px var(--text);color:var(--muted)}
+.chart-box:empty::after{content:'Loading chart…';display:grid;place-items:center;min-height:140px;font:400 12px var(--text);color:var(--muted)}
 
 /* ---- Interaction feedback ---- */
 #trade-output.sparkle{animation:meso-sparkle .9s ease-out}
@@ -527,3 +529,85 @@ span.insufficient{font-size:12px;white-space:nowrap}
 .ref-price .ref-type{font:700 11px var(--display);letter-spacing:.4px;text-transform:uppercase;color:var(--muted)}
 .ref-price small{flex-basis:100%;color:var(--muted)}.ref-price.stale{opacity:.7}.ref-price button{margin-left:auto}
 .ref-admin{margin-top:10px}.ref-form{display:flex;flex-wrap:wrap;gap:8px;align-items:end}.ref-form input[type=number]{width:9em}.ref-form input[type=url]{width:22em;max-width:100%}
+
+/* ---- Companion ---- */
+.companion .cp-actions{flex-wrap:wrap;gap:8px}
+.cp-kpis{grid-template-columns:repeat(3,minmax(0,1fr));margin:10px 0 8px}
+.cp-kpis .kpi strong{font-size:22px;overflow-wrap:anywhere}
+.cp-meter{height:14px;border-radius:7px;background:var(--cream-3);border:2px solid var(--cream-line);overflow:hidden}
+.cp-meter i{display:block;height:100%;width:0;background:linear-gradient(#d7e94f,#9cc21e);transition:width .6s ease}
+.cp-gained{min-height:1.4em;margin:6px 0 10px}
+.cp-rates{grid-template-columns:repeat(3,minmax(0,1fr))}
+.cp-map{margin:2px 0 0;font-size:15px;overflow-wrap:anywhere}
+.cp-minimap{display:block;max-width:100%;width:100%;margin-top:8px;border-radius:var(--radius-sm);image-rendering:pixelated;border:2px solid var(--cream-line)}
+.cp-quest-head{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.cp-quest-time{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin:6px 0}
+.cp-quest-time strong{font-size:20px}
+.cp-stages{list-style:none;margin:0;padding:0;display:grid;gap:4px}
+.cp-stages li{padding:5px 8px;border-radius:var(--radius-sm);background:var(--cream-2);border-left:4px solid var(--cream-line)}
+.cp-stages li small{display:block;color:var(--muted);overflow-wrap:anywhere}
+.cp-stages li.done{border-left-color:var(--grass)}
+.cp-stages li.done b::before{content:"✓ "}
+.cp-stages li.current{border-left-color:var(--gold-deep);background:var(--cream-3);box-shadow:inset 0 0 0 1px var(--cream-line)}
+.cp-routes{margin-top:6px}.cp-routes ul{margin:4px 0 0;padding-left:16px}
+.cp-help{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.cp-help li{font-size:12px;line-height:1.4}
+.cp-help li.ok{color:var(--muted)}
+.cp-help li.warn{padding:6px 8px;border-radius:var(--radius-sm);background:var(--cream-2);border-left:4px solid var(--orange)}
+.cp-help li.warn b{display:block}
+.cp-mob{display:flex;align-items:center;gap:6px}.cp-mob img{object-fit:contain}
+.cp-details>summary{cursor:pointer;font-weight:700}
+.cp-debug{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:6px 14px;margin:10px 0}
+.cp-debug dt{font-size:11px;color:var(--muted)}.cp-debug dd{margin:0;overflow-wrap:anywhere}
+.cp-credit{margin-top:10px}
+.exp-chart{--exp-bar:#c9791a}
+.exp-bar{fill:var(--exp-bar)}
+.exp-hit{fill:transparent}
+.exp-col:hover .exp-hit{fill:rgba(92,67,38,.08)}
+.cp-pip{margin:0;padding:10px 12px;display:flex;flex-direction:column;gap:3px;background:var(--cream);color:var(--ink);font:12px var(--text)}
+.cp-pip-top{display:flex;justify-content:space-between;font-size:15px}
+.cp-pip-rate{font-size:16px;font-weight:700}
+.cp-pip-actions{display:flex;gap:6px;margin-top:4px}
+@media(max-width:760px){.cp-kpis,.cp-rates{grid-template-columns:1fr 1fr}.cp-kpis .kpi:first-child{grid-column:span 2}.cp-rates>div:first-child{grid-column:span 2}}
+.cp-main{display:grid;gap:14px;min-width:0;align-content:start}
+.companion>aside{align-self:start}
+
+/* ---- Market tools ---- */
+.ip-window{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;margin:8px 0}
+.ip-window p{margin:0}
+.ip-tool label{display:block;font-weight:700;margin-bottom:4px}
+.trade-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.trade-grid label{margin:0}.trade-grid input{width:100%}
+.trade-output{margin-top:10px;grid-template-columns:repeat(2,minmax(0,1fr))}
+.alert-price{width:130px;text-align:right}
+.alert-actions{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.alert-banner{display:grid;gap:6px;margin:0 0 10px}
+.alert-hit{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;padding:8px 12px;border-radius:var(--radius-sm);background:var(--cream-2);border:2px solid var(--gold-deep)}
+.alert-hit button{margin-left:auto}
+.update-banner{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.link-button{background:none;border:0;box-shadow:none;padding:0 2px;color:var(--gold-deep);font:inherit;font-size:11px;text-decoration:underline;min-height:0}
+.link-button:hover{color:var(--maple);background:none;transform:none}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+@media(max-width:760px){.trade-output{grid-template-columns:1fr 1fr}}
+.view[data-view="trends"] .route-tabs{grid-template-columns:repeat(4,minmax(0,1fr))}
+.price-feed li>.fm-badge{justify-self:start;width:auto}
+@media(max-width:760px){.view[data-view="trends"] .route-tabs{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* ---- Falling maple leaves ---- */
+.maple-fall{position:absolute;inset:0;overflow:hidden;pointer-events:none}
+.maple-fall i{position:absolute;top:-36px;left:var(--x);width:var(--s);height:var(--s);background:url("sprites/maple-leaf.png") center/contain no-repeat;image-rendering:pixelated;opacity:.88;will-change:transform;animation:leaf-drop var(--d) linear var(--delay) infinite}
+.maple-fall i.gold{background-image:url("sprites/maple-leaf-gold.png")}
+@keyframes leaf-drop{
+ 0%{transform:translate3d(0,0,0) rotate(0)}
+ 25%{transform:translate3d(var(--sway),27vh,0) rotate(calc(var(--spin)*.3))}
+ 50%{transform:translate3d(calc(var(--sway)*-.4),54vh,0) rotate(calc(var(--spin)*.55))}
+ 75%{transform:translate3d(calc(var(--sway)*.7),81vh,0) rotate(calc(var(--spin)*.8))}
+ 100%{transform:translate3d(0,calc(100vh + 72px),0) rotate(var(--spin))}
+}
+html[data-theme="dark"] .maple-fall i{opacity:.62}
+@media(prefers-reduced-motion:reduce){.maple-fall i{animation:none;top:var(--rest);opacity:.5;transform:rotate(calc(var(--spin)*.2))}.maple-fall i:nth-child(even){display:none}}
+
+/* ---- Site admin ---- */
+.site-admin{margin-top:14px}.site-admin>summary{cursor:pointer;font-weight:700}
+.site-admin .admin-list li{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center}
+.site-admin .admin-list textarea,.site-admin .admin-list input{min-width:220px;flex:1 1 220px}

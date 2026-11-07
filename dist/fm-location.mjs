@@ -3,7 +3,7 @@
 //  - World and channel: the Change Channel menu; the current channel is the one blue cell in a grid of grey cells.
 //  - Store list: the rows left of the shop chat, "Orange Potion / 1 for 125 mesos"; sold rows are greyed out.
 // Pure functions over OCR words (tsvWords) and RGBA pixels {data,width,height}, shared by app.js and the tests.
-import {rowsOf} from './locate.mjs?v=autoselect-7';
+import {rowsOf} from './locate.mjs?v=depth-1';
 import {cleanMapName,looksLikeFm} from './location.mjs?v=loc-1';
 
 const lum=(px,x,y)=>{const p=(y*px.width+x)*4,d=px.data;return .299*d[p]+.587*d[p+1]+.114*d[p+2];};
@@ -25,7 +25,9 @@ const view=(px,r)=>{const data=new Uint8ClampedArray(r.w*r.h*4);for(let y=0;y<r.
 // pixels) and the text height, or null.
 export function roomLine(px,corner){
  const c=view(px,corner);
- const blue=components(c,panelBlue).filter(k=>k.w>=50&&k.h>=18&&k.n>=k.w*k.h*.2).sort((a,b)=>b.n-a.n)[0];
+ // The expanded minimap is anchored at the top-left. A larger blue sky patch can
+ // share the title panel's colors, so area is not evidence of the minimap.
+ const blue=components(c,panelBlue).filter(k=>k.w>=50&&k.h>=18&&k.n>=k.w*k.h*.2).sort((a,b)=>a.y-b.y||a.x-b.x)[0];
  if(!blue)return null;
  const x0=blue.x+Math.round(blue.w*.3),x1=blue.x+blue.w,rows=[];
  for(let y=blue.y;y<blue.y+blue.h;y++){let w=0,b=0;for(let x=x0;x<x1;x++){if(titleWhite(c,x,y))w++;else if(panelBlue(c,x,y))b++;}rows.push({y,w,b:b>=(x1-x0)*.3});}
@@ -33,12 +35,24 @@ export function roomLine(px,corner){
  const panel=runs(r=>r.b).sort((p,q)=>(q.y1-q.y0)-(p.y1-p.y0))[0];
  if(!panel||panel.y1-panel.y0<15)return null;
  const band=runs(r=>r.b&&r.w>=2&&r.y>=panel.y0&&r.y<=panel.y1).filter(b=>b.y1-b.y0>=3).at(-1);if(!band)return null;
- const h=band.y1-band.y0+1,pad=Math.round(h*.7);
- return{h,crop:clampRect({x:corner.x+blue.x+blue.w*.28,y:corner.y+band.y0-pad,w:blue.w*.72+2,h:h+2*pad},px.width,px.height)};
+ // The map icon at the panel's left is as wide as about one and a quarter panel heights, whatever the width of the name beside it.
+ const h=band.y1-band.y0+1,pad=Math.round(h*.7),icon=Math.min(blue.w*.28,(panel.y1-panel.y0+1)*1.25);
+ return{h,crop:clampRect({x:corner.x+blue.x+icon,y:corner.y+band.y0-pad,w:blue.w-icon+2,h:h+2*pad},px.width,px.height)};
 }
 // Reads of that line, scaled so the text is as tall as in the reference screenshot (8px line read at 4-6x).
 export const roomLineReads=h=>ROOM_READS.map(o=>({...o,scale:Math.max(1,Math.round(o.scale*9.5/h))}));
 export const ROOM_CHARS='FreMakt<>0123456789 ';                  // whitelist: keeps "8" from reading as "g"
+// Pixel position of the yellow player/store marker, relative to the minimap.
+export function storeMinimap(px){
+ const c=view(px,roomCorner(px.width,px.height));
+ const panel=components(c,panelBlue).filter(k=>k.w>=50&&k.h>=18&&k.n>=k.w*k.h*.2).sort((a,b)=>a.y-b.y||a.x-b.x)[0];
+ if(!panel)return null;
+ const map=clampRect({x:panel.x,y:panel.y+panel.h+3,w:panel.w,h:panel.h*1.8},px.width,px.height);
+ const yellow=(p,x,y)=>{const i=(y*p.width+x)*4,d=p.data;return d[i]>=190&&d[i+1]>=170&&d[i+2]<=120&&d[i]-d[i+2]>=80;};
+ const dots=components(view(px,map),yellow).filter(k=>k.n>=3&&k.w>=2&&k.h>=2&&k.w<=map.w*.12&&k.h<=map.h*.2&&k.w/k.h>=.4&&k.w/k.h<=2.5);
+ if(dots.length!==1)return{map,marker:null};
+ const d=dots[0];return{map,marker:{x:d.x+(d.w-1)/2,y:d.y+(d.h-1)/2}};
+}
 // Fallback when no panel is found: OCR over the corner.
 export const ROOM_FIND={scale:3};                                   // gray, finds the title line
 // White-on-blue title, levels stretched (90-230) then inverted and thresholded: plain thresholding drops the digit at some display
@@ -88,6 +102,20 @@ export const worldBand=(grid,W,H)=>clampRect({x:grid.left,y:grid.top-grid.cellH*
 export const WORLD_READS=[{scale:4,binarize:true}];  // block mode (psm 6): the wing icon precedes the name
 export function parseWorld(text){const m=String(text||'').match(/[A-Za-z]{3,16}/g);if(!m)return null;const w=m.sort((a,b)=>b.length-a.length)[0];return w[0].toUpperCase()+w.slice(1).toLowerCase();}
 
+// ---- The owner's own store, seen from its buttons ----
+// Only the owner's window has Sold Items (lime) above Close Store (orange), equally wide and left-aligned. OCR misses those small labels
+// in a small capture, and the scanner must never publish the player's own store as an FM listing; their colours need no reading.
+const limeButton=(px,x,y)=>{const p=(y*px.width+x)*4,[r,g,b]=[px.data[p],px.data[p+1],px.data[p+2]];return g>=130&&b<=120&&g-b>=60&&r>=80&&r<=205&&g-r>=10;};
+const orangeButton=(px,x,y)=>{const p=(y*px.width+x)*4,[r,g,b]=[px.data[p],px.data[p+1],px.data[p+2]];return r>=200&&g>=95&&g<=175&&b<=120&&r-b>=100&&r-g>=40;};
+const buttonLike=c=>c.w>=26&&c.h>=6&&c.w/c.h>=2.2&&c.w/c.h<=8&&c.n>=c.w*c.h*.3;
+export function ownerControls(px){
+ const lime=components(px,limeButton).filter(buttonLike);if(!lime.length)return false;
+ const orange=components(px,orangeButton).filter(buttonLike);
+ return lime.some(a=>orange.some(b=>Math.abs(a.x-b.x)<=a.h*1.2&&Math.abs(a.w-b.w)<=a.w*.25&&b.y>a.y&&b.y-a.y<=a.h*6));
+}
+// The list a shop row belongs to, sized from the row's own name-and-price block: its icons, and up to five rows either way.
+export const shopListArea=(block,W,H)=>clampRect({x:block.x-block.h*1.3,y:block.y-block.h*7,w:block.h*6.2,h:block.h*14},W,H);
+
 // ---- The owner's store list ----
 // Left of the shop chat window, as wide as the chat and as tall; includes the list's icons and scrollbar, which parsing skips.
 export const storeListArea=(chat,W,H)=>clampRect({x:chat.x-chat.w,y:chat.y,w:chat.w,h:chat.h},W,H);
@@ -125,6 +153,15 @@ export function parseStoreRows(words){
   rows.push({item,...price,box:{x:left,y:top,w:Math.max(above.x+above.w,line.x+line.w)-left,h:line.y+line.h-top},priceBox:{x:line.x,y:line.y,w:line.w,h:line.h}});
  }
  return rows;
+}
+// The icon cell sits immediately left of the name/price block. Neighboring row
+// spacing preserves its size across capture scaling and keeps crops in their own row.
+export function storeIconArea(row,rows,W,H){
+ const gaps=rows.filter(other=>other!==row).map(other=>Math.abs(other.box.y-row.box.y)).filter(gap=>gap>row.box.h);
+ const pitch=gaps.length?Math.min(...gaps):row.box.h*1.8;
+ const side=Math.min(pitch,row.box.h*2);
+ const padding=side*.04;
+ return clampRect({x:row.box.x-side-padding,y:row.box.y-(side-row.box.h)/2,w:side,h:side},W,H);
 }
 // Sold rows are drawn in light grey: no dark ink anywhere on the price line, but some grey ink (about 190 on a 244 background),
 // so a box that slipped onto empty background is not taken for a sold row.

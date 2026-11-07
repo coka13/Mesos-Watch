@@ -1,5 +1,5 @@
-import {client,configured,getItem}from './api.mjs?v=ms-4';
-import {iconEl,mesoAmt,ago}from './checker.mjs?v=ms-8';
+import {client,configured,getItem}from './api.mjs?v=depth-1';
+import {iconEl,mesoAmt,ago}from './checker.mjs?v=depth-1';
 import {result}from './community-api.mjs';
 const $=id=>document.getElementById(id),world=()=>$('world').value||'';
 const el=(t,p={},...kids)=>{const e=Object.assign(document.createElement(t),p);e.append(...kids.filter(x=>x!=null));return e;};

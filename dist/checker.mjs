@@ -1,6 +1,6 @@
 // Price Checker (home), item pages, Market Trends and Price History.
 import {whereToFind,matchesFilter} from './location.mjs?v=loc-1';
-import {configured,searchItems,getItem,itemSummary,currentListings,soldSightings,priceHistory,itemVariations,marketTrends,marketIndex,recentObservations,subscribe,iconUrl,baseStats,CATEGORY_LABEL,searchPaging,referencePrices,addReferencePrice,removeReferencePrice,adminState} from './api.mjs?v=ms-4';
+import {configured,searchItems,getItem,itemSummary,currentListings,soldSightings,priceHistory,itemVariations,marketTrends,marketIndexWindow,itemStats,recentObservations,subscribe,iconUrl,baseStats,CATEGORY_LABEL,searchPaging,referencePrices,addReferencePrice,removeReferencePrice,adminState} from './api.mjs?v=depth-1';
 import {chartSvg,shortMesos} from './chart.mjs?v=iqr-1';
 import {INSUFFICIENT,MIN,REFERENCE_TYPES,sourceText,typicalAsk,typicalSold,vsTypical,latestReferences} from './price-source.mjs?v=1';
 const $=id=>document.getElementById(id);
@@ -89,7 +89,7 @@ function attachSearch(input,list,onPick){
 }
 
 // ---- Home ----
-let unsub=null,currentItem=null,range='7d',refreshTimer=null;
+let unsub=null,currentItem=null,range='7d',refreshTimer=null,statDays=7;
 let routeRequest=0,summaryRequest=0,chartRequest=0,historyRequest=0;
 async function loadHome(){
  const request=routeRequest;
@@ -111,7 +111,7 @@ async function loadItem(id){
  $('ip-name').textContent='Loading item…';
  for(const field of ['ip-icon','ip-meta','ip-links','ip-chart','ip-base','ip-vars','ip-ref','ip-listings-src','ip-sold-src','ip-chart-src'])$(field).replaceChildren();
  for(const field of ['k-low','k-median','k-value','k-fresh'])kpi(field,null,'');
- lastSummary=null;
+ lastSummary=null;$('ip-depth').textContent='';
  delete $('k-fresh').dataset.fresh;
  lastListings=[];lastSold=[];renderListings();
  $('ip-vars-empty').hidden=false;
@@ -138,21 +138,28 @@ async function loadItem(id){
 async function loadSummary(){
  const item=currentItem;if(!item)return;
  const request=++summaryRequest;
- const [s,listings,sold]=await Promise.all([itemSummary(item.id,world()),currentListings(item.id,world()),soldSightings(item.id,world()).catch(()=>[])]);
+ const days=statDays;
+ const [base,listings,sold,w]=await Promise.all([itemSummary(item.id,world()),currentListings(item.id,world()),soldSightings(item.id,world()).catch(()=>[]),itemStats(item.id,world(),days).catch(()=>null)]);
  if(request!==summaryRequest||item!==currentItem)return;
+ // The chosen window's figures, where the database has them; otherwise this week's.
+ const s=w?{...base,listings_7d:w.listings,median_ask_7d:w.median,ask_p25_7d:w.p25,ask_p75_7d:w.p75,lowest_ask_24h:w.lowest_now,for_sale_now:w.for_sale_now,sold_seen_7d:w.sold_seen,sold_median_7d:w.sold_median,sold_p25_7d:w.sold_p25,sold_p75_7d:w.sold_p75}:base;
+ const span=windowLabel(w?days:7);
  lastListings=listings;lastSold=sold;lastSummary=s;
  const typical=typicalAsk(s);
+ $('k-median').querySelector('span').textContent=`Typical asking · ${span} · any captured variant`;
+ $('ip-depth').textContent=w?[`${fmt(w.listings)} listing${w.listings===1?'':'s'} in ${span}`,w.stale_listings?`${fmt(w.stale_listings)} stale (not seen for a day)`:'',w.gone_listings?`${fmt(w.gone_listings)} gone from their shop`:'',w.repeats_folded?`${fmt(w.repeats_folded)} repeat sighting${w.repeats_folded===1?'':'s'} counted once`:'',w.unusual?`${fmt(w.unusual)} unusual price${w.unusual===1?'':'s'} left out of the lowest`:'',`${fmt(w.sold_seen)} seen sold`].filter(Boolean).join(' · '):'';
+ window.dispatchEvent(new CustomEvent('mesoswatch:item-prices',{detail:{item,lowest:s.lowest_ask_24h?+s.lowest_ask_24h:null,typical:typical.ok?typical.value:null}}));
  const trend=typical.ok&&s.median_ask_prev_7d?Math.round(100*(s.median_ask_7d-s.median_ask_prev_7d)/s.median_ask_prev_7d):null;
  const forSale=s.for_sale_now??s.asks_24h;
  kpi('k-low',s.lowest_ask_24h,s.lowest_ask_24h?`${fmt(forSale)} listing${forSale==1?'':'s'} for sale now (seen in 24 h)`:'No listings for sale seen in the last 24 h',sourceText({type:'asking',at:s.ask_last_seen,window:'24 h'}));
- kpi('k-median',typical.ok?typical.value:null,typical.ok?[typical.range?`Middle half ${fmt(typical.range[0])}–${fmt(typical.range[1])}`:'',`${fmt(typical.n)} listings · ${fmt(s.reporters_7d)} player${s.reporters_7d==1?'':'s'}`,trend!=null?`${trend>0?'▲':trend<0?'▼':'■'} ${Math.abs(trend)}% vs last week`:''].filter(Boolean).join(' · '):typical.reason,
-  sourceText({type:'asking',at:s.ask_last_seen,n:typical.n,window:'7 d'}),typical.n>0);
+ kpi('k-median',typical.ok?typical.value:null,typical.ok?[typical.range?`Middle half ${fmt(typical.range[0])}–${fmt(typical.range[1])}`:'',`${fmt(typical.n)} listings · ${fmt(s.reporters_7d)} player${s.reporters_7d==1?'':'s'}`,trend!=null&&!(w&&days!==7)?`${trend>0?'▲':trend<0?'▼':'■'} ${Math.abs(trend)}% vs last week`:''].filter(Boolean).join(' · '):typical.reason,
+  sourceText({type:'asking',at:s.ask_last_seen,n:typical.n,window:span}),typical.n>0);
  kpi('k-value',s.estimated_value,s.estimated_value?`Median of ${fmt(s.sales_30d)} sales from ${fmt(s.sale_reporters_30d)} sellers (30 d)`:`Needs 3 reviewed sales from 2 sellers (have ${fmt(s.sales_30d)})`,
   sourceText({source:'sale',type:'sale',at:s.last_sale_at,n:s.sales_30d,unit:'sale',window:'30 d'}),+s.sales_30d>0);
  const f=freshness(s.last_seen);$('k-fresh').querySelector('strong').textContent=s.last_seen?ago(s.last_seen):'Never';$('k-fresh').querySelector('small').textContent=s.last_seen?new Date(s.last_seen).toLocaleString():'Not scanned yet in this world';$('k-fresh').dataset.fresh=f;
  const listSrc=sourceText({type:'asking',at:s.ask_last_seen,n:listings.length,window:'last 24 h'});
  $('ip-listings-src').replaceChildren(el('span',{textContent:listSrc.text,title:listSrc.title}));
- const ts=typicalSold(s),soldSrc=sourceText({type:'seenSold',at:s.sold_last_seen,n:s.sold_seen_7d??sold.length,unit:'sighting',window:'7 d'});
+ const ts=typicalSold(s),soldSrc=sourceText({type:'seenSold',at:s.sold_last_seen,n:s.sold_seen_7d??sold.length,unit:'sighting',window:span});
  $('ip-sold-src').replaceChildren(el('span',{textContent:(ts.ok?`Typical listed price of sold rows ${fmt(ts.value)}${ts.range?` (middle half ${fmt(ts.range[0])}–${fmt(ts.range[1])})`:''}`:`Typical sold price: ${INSUFFICIENT} (${ts.reason})`)+' · '+soldSrc.text,title:soldSrc.title}));
  renderListings();
 }
@@ -183,7 +190,9 @@ function renderListings(){
   return el('tr',{},el('td',{className:'num'},mesoAmt(fmt(l.price),13)),vsCell(v,typical),el('td',{className:'num',textContent:l.qty>1?'×'+l.qty:'1'}),el('td',{textContent:statText(l.stats)||'—',className:Object.keys(l.stats||{}).length?'stats':'muted'}),el('td',{textContent:[l.shop_title,l.seller_name].filter(Boolean).join(' · ')||'—'}),whereCell(l),
    el('td',{className:'badges'},el('span',{className:'fm-badge',textContent:'For sale',title:'Asking price: what the shop lists it for, not a confirmed sale'}),
     v?.unusual?el('span',{className:'fm-badge skipped',textContent:'Check price',title:'Far from the typical asking price: possibly a misread or a mistake in game. Check before buying.'}):null,
-    +l.reporters>1?el('span',{className:'fm-badge',textContent:'×'+l.reporters+' players',title:'Read by '+l.reporters+' different players'}):null),
+    +l.reporters>1?el('span',{className:'fm-badge',textContent:'×'+l.reporters+' players',title:'Read by '+l.reporters+' different players'}):null,
+    Date.now()-Date.parse(l.seen_at)>216e5?el('span',{className:'fm-badge skipped',textContent:'Aging',title:'Not seen for over 6 hours: it may have sold, or the shop may have closed'}):null,
+    l.observation_id?el('button',{type:'button',className:'link-button',textContent:'Report',title:'Report a wrong price or item',onclick:()=>window.dispatchEvent(new CustomEvent('mesoswatch:report',{detail:{observationId:l.observation_id,label:[currentItem?.name,fmt(l.price)+' mesos',l.shop_title].filter(Boolean).join(' · ')}}))}):null),
    el('td',{className:'when',textContent:ago(l.seen_at),title:seenTitle(l)}));}));
  $('ip-listings-empty').hidden=listings.length>0;
  $('ip-listings-empty').textContent=lastListings.length?'No listings in that channel, room or map':'No market data available yet';
@@ -195,6 +204,7 @@ function renderListings(){
 }
 for(const id of ['ip-f-channel','ip-f-room','ip-f-map'])document.getElementById(id)?.addEventListener('input',renderListings);
 $('ip-listing-sort').addEventListener('change',renderListings);
+$('ip-window').addEventListener('change',()=>{statDays=+$('ip-window').value||7;loadSummary().catch(()=>{});});
 // A headline figure, what it is based on, and its source (name, data type, time). With some data but not enough for a
 // reliable figure: "Insufficient data"; with none: a dash.
 function kpi(id,value,sub,src=null,insufficient=false){
@@ -281,26 +291,33 @@ function referenceForm(item){
 }
 
 // ---- Market trends ----
-let marketRows=[],marketRequest=0;
-// Rows from market_index. Items without a reliable median sort after those with one.
-const median=r=>+r.listings_7d>=MIN.typical&&r.ask_median?+r.ask_median:null;
+let marketRows=[],marketRequest=0,marketDays=7,marketTimer=null;
+const windowLabel=d=>d===1?'24 h':d+' d';
+// Rows from market_index_window. Items without a reliable median sort after those with one.
+const median=r=>+r.listings>=MIN.typical&&r.ask_median?+r.ask_median:null;
+const soldPrice=r=>+r.sold_seen>=MIN.seenSold&&r.sold_median?+r.sold_median:+r.sales>0&&r.sale_median?+r.sale_median:null;
 const byNum=(f,dir=1)=>(a,b)=>{const x=f(a),y=f(b);return x==null&&y==null?0:x==null?1:y==null?-1:dir*(x-y);};
+// Best match: the exact name, then its start, then the start of any word, then anywhere; busier markets first within each.
+const matchRank=(name,q)=>{const n=name.toLowerCase();return n===q?0:n.startsWith(q)?1:(' '+n).includes(' '+q)?2:3;};
+const busier=(a,b)=>(+b.for_sale_now||0)-(+a.for_sale_now||0)||(+b.listings||0)-(+a.listings||0);
 const marketSort={
- forsale:(a,b)=>(+b.for_sale_now||0)-(+a.for_sale_now||0)||(+b.listings_7d||0)-(+a.listings_7d||0),
- volume:(a,b)=>(+b.listings_7d||0)-(+a.listings_7d||0),
- sold:(a,b)=>(+b.sold_seen_7d||0)-(+a.sold_seen_7d||0)||(+b.sales_30d||0)-(+a.sales_30d||0),
- up:byNum(r=>r.change_24h_pct==null?null:+r.change_24h_pct,-1),
- down:byNum(r=>r.change_24h_pct==null?null:+r.change_24h_pct,1),
- recent:(a,b)=>Date.parse(b.last_seen)-Date.parse(a.last_seen),
- low:byNum(median,1),
- high:byNum(median,-1),
+ best:q=>(a,b)=>matchRank(a.name,q)-matchRank(b.name,q)||busier(a,b),
+ forsale:()=>busier,
+ volume:()=>(a,b)=>(+b.sold_seen||0)-(+a.sold_seen||0)||(+b.sales||0)-(+a.sales||0),
+ listed:()=>(a,b)=>(+b.listings||0)-(+a.listings||0),
+ soldprice:()=>byNum(soldPrice,-1),
+ up:()=>byNum(r=>r.change_24h_pct==null?null:+r.change_24h_pct,-1),
+ down:()=>byNum(r=>r.change_24h_pct==null?null:+r.change_24h_pct,1),
+ recent:()=>(a,b)=>Date.parse(b.last_seen)-Date.parse(a.last_seen),
+ low:()=>byNum(median,1),
+ high:()=>byNum(median,-1),
 };
 const insufficient=title=>el('span',{className:'muted insufficient',textContent:INSUFFICIENT,title});
 function typicalCell(r){
- const n=+r.listings_7d||0;
- if(!median(r))return el('td',{className:'num'},insufficient(n?`${n} listing${n===1?'':'s'} this week; a typical price needs ${MIN.typical}`:'No asking prices this week'));
+ const n=+r.listings||0,span=windowLabel(marketDays);
+ if(!median(r))return el('td',{className:'num'},insufficient(n?`${n} listing${n===1?'':'s'} in ${span}; a typical price needs ${MIN.typical}`:`No asking prices in ${span}`));
  const range=n>=MIN.range&&r.ask_p25&&r.ask_p75?`${shortMesos(+r.ask_p25)}–${shortMesos(+r.ask_p75)}`:'';
- return el('td',{className:'num',title:`Median of ${n} listings this week${range?'; middle half '+range:''} · FM Scanner asking prices`},mesoAmt(fmt(r.ask_median)),range?el('small',{className:'range',textContent:range}):null);
+ return el('td',{className:'num',title:`Median of ${n} listings in ${span}${range?'; middle half '+range:''} · FM Scanner asking prices`},mesoAmt(fmt(r.ask_median)),range?el('small',{className:'range',textContent:range}):null);
 }
 function changeCell(r){
  if(r.change_24h_pct==null)return el('td',{className:'num'},insufficient('Needs 3+ sightings in each of the last two days'));
@@ -308,42 +325,52 @@ function changeCell(r){
  return el('td',{className:'num vs'+(p>0?' up':p<0?' down':''),textContent:(p>0?'▲ ':p<0?'▼ ':'')+Math.abs(p)+'%',title:`Asking median ${fmt(r.median_24h)} in the last 24 h against ${fmt(r.median_prev_24h)} the day before`});
 }
 function soldCell(r){
- const seen=+r.sold_seen_7d||0,sales=+r.sales_30d||0;
+ const seen=+r.sold_seen||0,sales=+r.sales||0,span=windowLabel(marketDays);
  if(r.legacy)return el('td',{className:'num muted',textContent:'—'});
- return el('td',{className:'num',title:`${seen} row${seen===1?'':'s'} seen sold in shops in 7 days (listed prices)${r.sold_median_7d?', median '+fmt(r.sold_median_7d):''}; ${sales} confirmed sale${sales===1?'':'s'} in 30 days${r.sale_median_30d?', median '+fmt(r.sale_median_30d):''}`},
+ return el('td',{className:'num',title:`${seen} row${seen===1?'':'s'} seen sold in shops in ${span} (listed prices)${r.sold_median?', median '+fmt(r.sold_median):''}; ${sales} confirmed sale${sales===1?'':'s'}${r.sale_median?', median '+fmt(r.sale_median):''}`},
   document.createTextNode(fmt(seen)),sales?el('small',{className:'range',textContent:`${fmt(sales)} confirmed`}):null);
 }
+function throughCell(r){
+ if(r.sell_through_pct==null)return el('td',{className:'num'},insufficient('Needs 5 listings: the share of listings seen sold'));
+ return el('td',{className:'num',textContent:+r.sell_through_pct+'%',title:'Share of listings in this period later seen sold. Higher means it sells faster.'});
+}
 function renderMarketIndex(){
- const q=$('market-filter').value.trim().toLowerCase();
- const matches=marketRows.filter(row=>row.name.toLowerCase().includes(q));
- matches.sort(marketSort[$('market-sort').value]||marketSort.forsale);
+ const q=$('market-filter').value.trim().toLowerCase(),type=$('market-category').value;
+ const matches=marketRows.filter(row=>row.name.toLowerCase().includes(q)&&(!type||row.category===type));
+ const key=$('market-sort').value;
+ matches.sort((marketSort[key==='best'&&!q?'forsale':key]||marketSort.forsale)(q));
  $('market-index-rows').replaceChildren(...matches.map(row=>el('tr',{},
   el('td',{},itemLink(row)),
   typicalCell(row),
   changeCell(row),
   el('td',{className:'num',textContent:row.for_sale_now==null?'—':fmt(row.for_sale_now),title:row.lowest_now?'Lowest now '+fmt(row.lowest_now)+' mesos':''}),
   soldCell(row),
+  throughCell(row),
   el('td',{textContent:ago(row.last_seen),title:new Date(row.last_seen).toLocaleString()})
  )));
- const latest=marketRows.reduce((t,r)=>Math.max(t,Date.parse(r.last_seen)||0),0);
- const src=sourceText({type:'asking',at:latest?new Date(latest).toISOString():null,n:marketRows.length,unit:'item',window:'7 d'});
+ const latest=marketRows.reduce((t,r)=>Math.max(t,Date.parse(r.last_seen)||0),0),span=windowLabel(marketDays);
+ const src=sourceText({type:'asking',at:latest?new Date(latest).toISOString():null,n:marketRows.length,unit:'item',window:span});
+ const stale=marketRows.reduce((n,r)=>n+(+r.stale_listings||0),0),odd=marketRows.reduce((n,r)=>n+(+r.unusual||0),0);
+ const depth=[stale?`${fmt(stale)} stale listing${stale===1?'':'s'} (not seen for a day)`:'',odd?`${fmt(odd)} unusual price${odd===1?'':'s'} left out of the lowest prices`:''].filter(Boolean).join(', ');
  $('market-index-note').textContent=marketRows.length
-  ?`${matches.length} of ${marketRows.length} items. ${src.text}. Typical = median asking price of distinct listings, with the middle half; sold = rows seen sold in shops (listed price) and admin-confirmed sales. Open an item for history and where to find it.`
-  :'No recent market data available.';
+  ?`${matches.length} of ${marketRows.length} items. ${src.text}.${depth?' '+depth[0].toUpperCase()+depth.slice(1)+'.':''} Typical = median asking price of distinct listings, with the middle half; seen sold = rows seen sold in shops (listed price) and admin-confirmed sales. Open an item for history and where to find it.`
+  :`No market data in the last ${marketDays===1?'24 hours':marketDays+' days'}.`;
  $('market-index-note').title=src.title;
 }
-$('market-filter').addEventListener('input',renderMarketIndex);
-$('market-sort').addEventListener('change',renderMarketIndex);
+for(const [id,event] of [['market-filter','input'],['market-sort','change'],['market-category','change']])$(id).addEventListener(event,renderMarketIndex);
+$('market-filter').addEventListener('input',()=>{if($('market-filter').value.trim()&&$('market-sort').value==='forsale'){$('market-sort').value='best';renderMarketIndex();}});
+$('market-window').addEventListener('change',()=>{marketDays=+$('market-window').value||7;marketRows=[];loadTrends();});
 async function loadTrends(){
  const request=++marketRequest,route=routeRequest;
- marketRows=[];
- renderMarketIndex();
+ clearInterval(marketTimer);
+ if(!marketRows.length)renderMarketIndex();
  if(!configured()){$('trends-note').textContent='The price database is not connected yet.';$('market-index-note').textContent=$('trends-note').textContent;return;}
- $('trends-note').textContent='Loading…';
- $('market-index-note').textContent='Loading recent market data…';
- try{const [rows,index]=await Promise.all([marketTrends(world(),100),marketIndex(world())]);
+ if(!marketRows.length){$('trends-note').textContent='Loading…';$('market-index-note').textContent='Loading recent market data…';}
+ try{const [rows,index]=await Promise.all([marketTrends(world(),100),marketIndexWindow(world(),marketDays)]);
   if(request!==marketRequest||route!==routeRequest)return;
   marketRows=index;renderMarketIndex();
+  // New listings arrive all the time: the index refreshes by itself while it is on screen.
+  marketTimer=setInterval(()=>{if(document.body.dataset.view!=='trends')clearInterval(marketTimer);else if(!document.hidden)loadTrends();},6e4);
   const moved=rows.filter(r=>r.change_pct!=null);
   const fill=(id,list,val)=>$(id).replaceChildren(...(list.length?list.map(r=>el('li',{},itemLink(r),el('b',{textContent:val(r)}),el('small',{title:'FM Scanner asking prices · last seen '+new Date(r.last_seen).toLocaleString()},...(+r.asks_7d>=MIN.typical?[mesoAmt(fmt(r.median_now),11),document.createTextNode(' asking median')]:[document.createTextNode('Median: '+INSUFFICIENT)]),document.createTextNode(` · ${fmt(r.asks_7d)} seen · ${ago(r.last_seen)}`)))):[el('li',{className:'empty',textContent:`${INSUFFICIENT}: needs 3+ sightings in each of the last two weeks.`})]));
   fill('t-up',moved.filter(r=>+r.change_pct>0).sort((a,b)=>b.change_pct-a.change_pct).slice(0,10),r=>'▲ '+r.change_pct+'%');
@@ -412,6 +439,7 @@ async function live(){
  }catch{}finally{if(request===liveRequest)livePending=false;}
 }
 export function worldChanged(){
+ window.dispatchEvent(new Event('mesoswatch:world'));
  liveRequest++;livePending=false;unsub?.();unsub=null;$('live-dot').hidden=true;
 }
 

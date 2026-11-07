@@ -18,16 +18,16 @@ for(const view of document.querySelectorAll('main>.view:not([data-view="checker"
  for(const child of [...view.children])if(!child.classList.contains('page-head'))content.append(child);
  view.append(content);
  const key=view.dataset.view;
- const sections=key==='store'?[content.querySelector('.workspace'),content.querySelector('#sale-activity')]:key==='opportunities'?[...content.querySelectorAll(':scope>.panel')]:key==='settings'?[content.querySelector('.activity'),content.querySelector('.privacy')]:[];
- if(sections.length===2&&sections.every(Boolean)){
-  const labels=key==='store'?['Watch my shop','Sales history']:key==='opportunities'?['Profit calculator','Market opportunities']:['Browser data','Privacy & sources'];
+ const sections=key==='store'?[content.querySelector('.workspace'),content.querySelector('#sale-activity')]:key==='trends'?['market-index-tab','market-movers-tab','market-flips-tab','market-alerts-tab'].map(id=>document.getElementById(id)):key==='settings'?[content.querySelector('.activity'),content.querySelector('.privacy')]:[];
+ if(sections.length>=2&&sections.every(Boolean)){
+  const labels=key==='store'?['Watch my shop','Sales history']:key==='trends'?['Market index','Rising & falling','Buy low, sell high','Your alerts']:['Browser data','Privacy & sources'];
   const tabs=document.createElement('div');tabs.className='route-tabs';tabs.setAttribute('role','tablist');tabs.setAttribute('aria-label',view.querySelector('h1').textContent+' sections');
   const frame=document.createElement('div');frame.className='route-tab-frame';const panels=[];const buttons=[];
   function pick(index){panels.forEach((panel,i)=>{panel.hidden=i!==index;buttons[i].setAttribute('aria-selected',String(i===index));buttons[i].tabIndex=i===index?0:-1;if(i===index)panel.scrollTop=0;});}
   sections.forEach((section,i)=>{
    const panel=document.createElement('div');panel.className='route-tab-panel';panel.id='route-'+key+'-panel-'+i;panel.setAttribute('role','tabpanel');panel.tabIndex=0;
    const button=document.createElement('button');button.type='button';button.id='route-'+key+'-tab-'+i;button.textContent=labels[i];button.setAttribute('role','tab');button.setAttribute('aria-controls',panel.id);panel.setAttribute('aria-labelledby',button.id);
-   button.addEventListener('click',()=>pick(i));button.addEventListener('keydown',event=>{if(['ArrowLeft','ArrowRight','Home','End'].includes(event.key)){event.preventDefault();const next=event.key==='Home'?0:event.key==='End'?1:1-i;pick(next);buttons[next].focus();}});
+   button.addEventListener('click',()=>pick(i));button.addEventListener('keydown',event=>{if(['ArrowLeft','ArrowRight','Home','End'].includes(event.key)){event.preventDefault();const n=sections.length,next=event.key==='Home'?0:event.key==='End'?n-1:event.key==='ArrowLeft'?(i+n-1)%n:(i+1)%n;pick(next);buttons[next].focus();}});
    if(section.tagName==='DETAILS')section.open=true;
    panel.append(section);frame.append(panel);tabs.append(button);panels.push(panel);buttons.push(button);
   });content.prepend(tabs,frame);pick(0);
